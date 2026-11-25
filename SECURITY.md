@@ -25,10 +25,14 @@ This is a volunteer-maintained research project. Reports are handled on a best-e
 
 ## Scope
 
-Combusta is a numerical library. It opens no network connections, runs no subprocesses, and does not deserialize pickled or otherwise executable data. Its attack surface is limited to the files it parses:
+Combusta is a numerical library with a command-line front end. The library and the `combusta` command open no network connections, run no subprocesses, and do not deserialize pickled or otherwise executable data. The attack surface consists of the files Combusta reads and writes:
 
-- ANSYS Forte CSV exports (`combusta.io.forte_parser`),
-- Engine Combustion Network text tables (`combusta.io.ecn_loader`).
+- case files (`case.toml`, parsed with the standard-library `tomllib` in `combusta.casefile`),
+- ANSYS Forte CSV exports and generic crank-angle tables (`combusta.io.forte_parser`, `combusta.io.trace_csv`),
+- Engine Combustion Network text tables (`combusta.io.ecn_loader`),
+- reports, CSV files, and figures written by `combusta compare`, `matched`, `prechamber`, and `measurement` into the output directory given on the command line (existing files of the same name are overwritten).
+
+Case files are treated as trusted input: a case file may point to any file the user can read, relative to its own location. Do not run Combusta on case files from untrusted sources without reading them first.
 
 In scope are, for example, crashes, excessive memory or CPU use, or path handling problems triggered by a crafted input file, and vulnerabilities in how Combusta uses its dependencies.
 

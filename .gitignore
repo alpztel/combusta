@@ -55,3 +55,8 @@ Thumbs.db
 # Generated example reports
 examples/output/
 combusta_report/
+
+# Locally downloaded reference data (e.g. ECN); distributed under its own terms
+benchmarks/*.csv
+benchmarks/*.txt
+benchmarks/*.dat

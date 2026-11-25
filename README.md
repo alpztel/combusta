@@ -15,7 +15,15 @@
 <details>
 <summary><b>Türkçe özet</b></summary>
 
-Combusta, içten yanmalı motor çevrimlerini simülasyon (ör. ANSYS Forte) ve test düzeneği verisinden analiz eden bir Python kütüphanesidir. Krank açısına bağlı basınç izlerinden IMEP, verim, özgül yakıt tüketimi, CA10/50/90 gibi standart çevrim metriklerini çıkarır; farklı motor konfigürasyonlarını (ör. açık yanma odası ve ön yanma odası) yan yana karşılaştırır ve farkların sayısal belirsizlikten (GCI) büyük olup olmadığını raporlar. Emisyon son işleme (ppm → g/kWh, emisyon indeksi, yanma verimi) ve ASME V&V 20 doğrulama (E = S − D, u<sub>val</sub>) modülleri içerir. Termodinamik özellikler yakıttan bağımsızdır; hidrojen dahil her C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> yakıtı her λ değerinde desteklenir. Tüm modeller analitik çözümlere ve literatür verisine karşı doğrulanmıştır; gerçek motor verisiyle validasyon henüz yapılmamıştır.
+Combusta, içten yanmalı motor çevrimlerini simülasyon (ör. ANSYS Forte) ve test düzeneği verisinden analiz eden bir Python kütüphanesidir. Krank açısına bağlı basınç izlerinden IMEP, verim, özgül yakıt tüketimi, CA10/50/90 gibi standart çevrim metriklerini çıkarır; farklı motor konfigürasyonlarını yan yana karşılaştırır ve farkların sayısal belirsizlikten (GCI) büyük olup olmadığını raporlar.
+
+- **Vaka dosyaları ve komut satırı:** her vaka bir `case.toml` ile tanımlanır; `combusta compare` girdilerin SHA-256 özetini içeren bir rapor üretir.
+- **Eşleştirilmiş karşılaştırma:** avans taramaları aynı CA50'de ya da her konfigürasyonun kendi MBT avansında karşılaştırılır (`combusta matched`).
+- **Ön yanma odası analizi:** ön oda ve ana oda, orifislerle bağlı iki hacim olarak incelenir; jet zamanlaması, jet kütlesi ve ısı salımı paylaşımı hesaplanır (`combusta prechamber`).
+- **Ölçüm belirsizliği:** ÜÖN faz hatası, seviyeleme ofseti, kazanç hatası ve gürültünün metriklere etkisi hesaplanır (`combusta measurement`).
+- Emisyon son işleme (ppm → g/kWh, emisyon indeksi, yanma verimi) ve ASME V&V 20 doğrulama (E = S − D, u<sub>val</sub>).
+
+Termodinamik özellikler yakıttan bağımsızdır; hidrojen dahil her C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> yakıtı her λ değerinde desteklenir. Tüm modeller analitik çözümlere ve literatür verisine karşı doğrulanmıştır; gerçek motor veya CFD verisiyle validasyon henüz yapılmamıştır.
 
 </details>
 
@@ -42,8 +50,11 @@ Combusta, içten yanmalı motor çevrimlerini simülasyon (ör. ANSYS Forte) ve 
 - Builds a source-independent engine case (`EngineCase`) from CFD exports, test-bench traces, or 1D model output, with a geometry/volume consistency check that detects crank-angle offsets and geometry mismatches.
 - Computes single-zone apparent and gross heat release with temperature- and composition-dependent gas properties, burn fractions, IMEP, indicated power, efficiency, and specific fuel consumption.
 - Compares any number of cases against a baseline and flags which differences exceed the combined numerical uncertainty.
+- Compares spark-timing sweeps of several configurations at matched CA50 or each at its own MBT timing.
+- Analyzes pre-chamber engines as two volumes connected by orifices: pressure difference, jet timing and mass, and the heat release of each volume.
 - Converts exhaust concentrations to specific emissions and emission indices, and estimates combustion efficiency from the chemical energy left in the exhaust.
-- Estimates discretization uncertainty with the Grid Convergence Index (Celik et al., 2008) and performs ASME V&V 20 validation comparisons.
+- Estimates discretization uncertainty with the Grid Convergence Index (Celik et al., 2008), propagates pressure-measurement errors into the cycle metrics, and performs ASME V&V 20 validation comparisons.
+- Reads cases from TOML files and writes traceable reports from the command line (`combusta inspect`, `compare`, `matched`, `prechamber`, `measurement`).
 - Provides application modules for diesel auto-ignition, spray penetration, standard-atmosphere altitude scaling, and Second-Law exergy analysis.
 
 **What Combusta does not do**
@@ -107,6 +118,16 @@ combusta prechamber prechamber_case --out pc_report
 ```
 
 The report gives the pressure difference across the orifices, jet start and end, the mass leaving the pre-chamber, the heat release of each volume and the pre-chamber share, and, when zone temperatures or masses are exported, the effective discharge coefficient fitted to the exported mass exchange.
+
+### Estimate the uncertainty from the pressure measurement
+
+For test-bench data, give the standard uncertainties of the measurement chain in a `[measurement]` table of the case file or on the command line:
+
+```bash
+combusta measurement bench_case --tdc 0.2 --offset 5000 --gain 0.01 --noise 2000 --savgol 21 --out meas
+```
+
+The report lists the contribution of each error source to every metric (linear propagation) and the Monte Carlo standard deviation of all sources combined ([Section 8](#8-validation-asme-vv-20)).
 
 ### Compare two engine configurations in Python
 
@@ -172,7 +193,7 @@ print(result.summary())
 | `combusta.prechamber` | Two-volume pre-chamber analysis: isentropic orifice flow, open-system heat release of both volumes, jet timing and mass, discharge-coefficient fit |
 | `combusta.sweep` | Spark-timing sweeps: `metrics_at` (interpolation to a target CA50 or spark timing), `find_mbt` (quadratic MBT fit with uncertainty), `compare_matched` |
 | `combusta.report`, `combusta.cli` | `write_comparison_report`, `write_matched_report`, `write_pre_chamber_report`, `write_measurement_report`; the `combusta inspect`, `compare`, `matched`, `prechamber`, and `measurement` commands |
-| `combusta.synthetic` | Manufactured cycles with known heat release (`manufactured_cycle`) and their case files, for testing a pipeline before real data exist |
+| `combusta.synthetic` | Manufactured single-zone and two-volume pre-chamber cycles with known heat release, and their case files, for testing a pipeline before real data exist |
 | `combusta.thermo` | Fuels and stoichiometry, NASA 7-coefficient polynomials, slider-crank kinematics, heat release, burn fractions, IMEP, Woschni and Hohenberg heat transfer, knock metrics, TDC phasing check |
 | `combusta.emissions` | Exhaust composition, ppm to mass (wet/dry), specific emissions, emission indices, combustion efficiency |
 | `combusta.vv` | Grid Convergence Index (`compute_gci`, `compute_grid_size`) and ASME V&V 20 validation (`validate` and uncertainty helpers) |
@@ -181,7 +202,7 @@ print(result.summary())
 | `combusta.ignition` | Wolfer, Assanis et al. and Hardenberg-Hase ignition delay; Livengood-Wu integral; CFD ignition and two-stage heat-release detection |
 | `combusta.spray` | Hiroyasu-Arai and Naber-Siebers tip penetration; altitude density scaling; penetration error norms |
 | `combusta.exergy` | Dead state from the standard atmosphere; fuel chemical exergy; thermomechanical exergy; Gouy-Stodola destruction; cycle exergy budget |
-| `combusta.plotting` | Headless publication figures (cycle diagnostics, case overlay, log P-V, spray, GCI) |
+| `combusta.plotting` | Headless publication figures (cycle diagnostics, case overlay, sweep overview, pre-chamber diagnostics, log P-V, spray, GCI) |
 | `combusta.constants` | Physical constants, unit conversion tables, ISO 2533 standard atmosphere |
 
 ## Mathematical formulation
@@ -334,7 +355,7 @@ For three systematically refined grids with representative spacing $`h_i = (V/N_
 
 ```math
 \varepsilon_{21} = \phi_2 - \phi_1,\quad \varepsilon_{32} = \phi_3 - \phi_2,\quad
-s = \operatorname{sgn}\!\left(\frac{\varepsilon_{32}}{\varepsilon_{21}}\right),\quad
+s = \mathrm{sgn}\left(\frac{\varepsilon_{32}}{\varepsilon_{21}}\right),\quad
 R = \frac{\varepsilon_{21}}{\varepsilon_{32}}
 ```
 
@@ -595,6 +616,9 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 - **Knock.** MAPO and ringing intensity need a local pressure signal; spatially averaged CFD pressure removes the acoustic modes.
 - **GCI with adaptive meshing.** Adaptive mesh refinement is not a systematic refinement; a GCI computed from cell counts of AMR runs should be interpreted with care.
 - **Exergy.** The budget uses a single gas model of constant composition.
+- **Pre-chamber.** Each volume is one zone with the frozen unburned-charge gas model; the orifice flow is quasi-steady with a constant discharge coefficient; the main-chamber trace must exclude the pre-chamber volume.
+- **Matched comparison.** MBT is defined on gross IMEP, assuming friction and pumping work independent of spark timing; the MBT-timing uncertainty is not propagated into the metric uncertainties; targets outside a sweep are rejected.
+- **Measurement uncertainty.** Thermal shock, encoder resolution, and geometry errors are not modeled; the Monte Carlo trial count is too small for coverage intervals.
 - **Readers.** The ANSYS Forte readers recognize common header aliases but have not yet been tested on real exports. Unrecognized headers are mapped in the case file (`[trace.columns]`), and the sign of the wall heat-loss column must be checked on the first real case (`wall_heat_loss_sign`); see the [CFD output checklist](docs/forte-output-checklist.md).
 
 ## Roadmap
@@ -617,7 +641,7 @@ pytest -m strict_audit # analytical audits
 pyrefly check          # static type check
 ```
 
-Continuous integration runs the type check, the test suite, and the example on Python 3.11, 3.12, and 3.13. Pull requests into `main` require all three jobs to pass. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the code of conduct, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) and the [releases page](https://github.com/alpztel/combusta/releases) for the version history.
+Continuous integration runs the type check and the test suite (which also runs the altitude example end to end) on Python 3.11, 3.12, and 3.13 for every pull request and every push to `main`; CodeQL scans the code and Dependabot keeps dependencies current. Pull requests into `main` require all three test jobs to pass. Releases are built and attested by the release workflow. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the code of conduct, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) and the [releases page](https://github.com/alpztel/combusta/releases) for the version history.
 
 ## How to cite
 
@@ -628,6 +652,7 @@ Please cite Combusta through the metadata in [CITATION.cff](CITATION.cff) (GitHu
   author  = {{\"O}ztel, Alperen},
   title   = {Combusta: Fuel-Agnostic Engine Combustion Analysis, Case Comparison, and Verification \& Validation Toolkit},
   year    = {2026},
+  version = {0.4.0},
   url     = {https://github.com/alpztel/combusta},
   license = {MIT}
 }

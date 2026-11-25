@@ -13,8 +13,7 @@
 ## Checklist
 
 - [ ] `pyrefly check` reports no errors
-- [ ] `pytest` passes
-- [ ] `python examples/altitude_sweep_demo.py` runs
+- [ ] `pytest` passes (it also runs the altitude example)
 - [ ] New or changed models cite their source in the docstring and the README
 - [ ] Tests added or updated, with the reference named in the test docstring
 - [ ] `CHANGELOG.md` updated under `[Unreleased]`

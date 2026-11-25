@@ -22,7 +22,20 @@ Never commit, attach, or paste confidential material: engine geometry or meshes,
 
 ### SI units inside, conversions at the boundary
 
-Every function in the numerical packages (`thermo`, `signal`, `spray`, `vv`, `ignition`, `exergy`, `emissions`, `compare`, `case`) takes and returns SI quantities. Units appear in parameter names (`pressure_pa`, `crank_angle_deg`, `dv_dtheta_m3_per_deg`) and in brackets in docstrings (`[Pa]`, `[J/deg]`). Unit conversion happens only in `combusta.io` (ingestion) and `combusta.plotting` (display), using the tables in `combusta.constants`.
+Every function in the numerical modules (`thermo`, `signal`, `spray`, `vv`, `ignition`, `exergy`, `emissions`, `compare`, `case`, `sweep`, `prechamber`, `measurement`, `synthetic`) takes and returns SI quantities. Units appear in parameter names (`pressure_pa`, `crank_angle_deg`, `dv_dtheta_m3_per_deg`) and in brackets in docstrings (`[Pa]`, `[J/deg]`). Unit conversion happens only at the boundaries: on input in `combusta.io` and `combusta.casefile` (using the tables in `combusta.constants`), on output in `combusta.plotting` and the reports of `combusta.report`. Case-file keys carry their SI unit in the name (`bore_m`, `intake_pressure_pa`).
+
+### Where things live
+
+| Area | Modules |
+| :--- | :--- |
+| Data model and input | `case`, `casefile`, `io` |
+| Cycle analysis | `thermo`, `signal`, `compare` |
+| Comparison and specialised analyses | `sweep`, `prechamber`, `emissions`, `exergy`, `ignition`, `spray` |
+| Uncertainty and V&V | `vv`, `measurement` |
+| Output | `report`, `cli`, `plotting` |
+| Verification fixtures | `synthetic` (manufactured cycles), `tests/` |
+
+A new analysis usually needs a function in a numerical module, a verification test, and, if it should be usable without code, a report function and a `combusta` subcommand.
 
 ### Every model has a source and a test
 
@@ -58,10 +71,12 @@ pip install -e ".[dev]"
 Run these from the repository root; CI runs the same steps on Python 3.11, 3.12, and 3.13:
 
 ```bash
-pyrefly check                        # static type check, 0 errors
-pytest                               # full test suite
-python examples/altitude_sweep_demo.py   # end-to-end smoke test
+pyrefly check            # static type check, 0 errors
+pytest                   # full test suite (also runs examples/altitude_sweep_demo.py)
+pytest -m unit           # fast subset while iterating
 ```
+
+The full suite takes under a minute locally. Keep it that way: forward models that an ODE solver calls many times should use plain-float arithmetic (see `combusta.synthetic`), and expensive fixtures should have module scope. CI prints the 15 slowest tests.
 
 Then:
 
@@ -71,7 +86,7 @@ Then:
 
 ## Review and merging
 
-`main` is protected. Pull requests are merged after the three CI jobs pass and the maintainer has reviewed the change. Review concentrates on physical correctness, traceability to the literature, and test coverage, in that order.
+`main` is protected. Pull requests are merged after the three test jobs pass and the maintainer has reviewed the change; CodeQL runs on every pull request as well. Review concentrates on physical correctness, traceability to the literature, and test coverage, in that order. Planned work is tracked in the [milestones](https://github.com/alpztel/combusta/milestones); issues labelled `roadmap` describe their scope and the verification expected.
 
 ## Releases
 

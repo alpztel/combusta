@@ -3,6 +3,9 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/alpztel/combusta/security/advisories/new
     about: Report security problems privately. Do not open a public issue.
+  - name: Case files and command line
+    url: https://github.com/alpztel/combusta/blob/main/docs/case-file.md
+    about: Format of case.toml and the combusta commands (inspect, compare, matched, prechamber, measurement).
   - name: Documentation and mathematical formulation
     url: https://github.com/alpztel/combusta#mathematical-formulation
     about: Equations, assumptions, and references behind every module.
