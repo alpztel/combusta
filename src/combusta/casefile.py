@@ -53,6 +53,7 @@ from combusta.case import CycleTrace, EngineCase, OperatingPoint
 from combusta.exceptions import CaseFileError, CombustaError
 from combusta.io.forte_parser import THERMO_FIELDS, ColumnSpec, parse_thermo_csv
 from combusta.io.trace_csv import TRACE_FIELDS, parse_trace_csv
+from combusta.measurement import PressureMeasurementUncertainty
 from combusta.prechamber import PreChamberGeometry
 from combusta.thermo.fuels import (
     DIESEL_SURROGATE,
@@ -89,7 +90,7 @@ FUEL_ALIASES: Final[Mapping[str, Fuel]] = {
 
 _TOP_LEVEL_KEYS: Final[frozenset[str]] = frozenset({
     "name", "source", "description", "configuration", "geometry", "operating_point", "trace",
-    "scalars", "emissions_kg_per_cycle", "uncertainty", "metadata", "pre_chamber",
+    "scalars", "emissions_kg_per_cycle", "uncertainty", "metadata", "pre_chamber", "measurement",
 })
 _TRACE_KEYS: Final[frozenset[str]] = frozenset({"file", "format", "wall_heat_loss_sign", "columns"})
 _PRE_CHAMBER_KEYS: Final[frozenset[str]] = frozenset({
@@ -147,6 +148,8 @@ class LoadedCase:
     pre_chamber : PreChamberInput | None
         Pre-chamber data from ``[pre_chamber]``; the case trace then describes the main
         chamber only.
+    measurement : PressureMeasurementUncertainty | None
+        Standard uncertainties of the pressure measurement from ``[measurement]``.
     """
 
     case: EngineCase
@@ -156,6 +159,7 @@ class LoadedCase:
     trace_sha256: str
     configuration: str | None = None
     pre_chamber: PreChamberInput | None = None
+    measurement: PressureMeasurementUncertainty | None = None
 
 
 def _table(data: Mapping[str, Any], key: str, where: str, *, required: bool) -> dict[str, Any]:
@@ -385,7 +389,17 @@ def load_case(path: str | Path) -> LoadedCase:
         trace_sha256=digest,
         configuration=None if configuration is None else configuration.strip(),
         pre_chamber=pre_chamber,
+        measurement=_measurement(data, where),
     )
+
+
+def _measurement(data: Mapping[str, Any], where: str) -> PressureMeasurementUncertainty | None:
+    """Read the optional ``[measurement]`` table of pressure-measurement uncertainties."""
+    table = _table(data, "measurement", where, required=False)
+    if not table:
+        return None
+    m_where = f"{where} [measurement]"
+    return _build(PressureMeasurementUncertainty, _numbers(table, m_where), m_where)
 
 
 def _pre_chamber(

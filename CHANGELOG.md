@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (measurement uncertainty)
+- `combusta.measurement`: `PressureMeasurementUncertainty` (TDC phasing, pegging offset, gain, noise), `perturb_pressure`, and `pressure_measurement_uncertainty` with a linear uncertainty budget (central differences, JCGM 100:2008) and a Monte Carlo propagation (JCGM 101:2008) reported with the standard error of its standard deviation. A traced temperature is replaced by the ideal-gas reconstruction when the trapped mass is known.
+- `[measurement]` table in case files, `combusta measurement` (with `--savgol` to reproduce the filtering of real data), `write_measurement_report`.
+- `tests/test_15_measurement_uncertainty.py`.
+- Documentation: README Section 8 (measurement uncertainty), Brunt & Emtage (1996), Randolph (1990), and JCGM 101:2008 references; case-file reference.
+
 ### Added (pre-chamber)
 - `combusta.prechamber`: isentropic orifice flow with choking (`orifice_mass_flow`, `critical_pressure_ratio`, `transfer_rate`), open-system apparent heat release with mass exchange (`zone_apparent_heat_release`), two-volume analysis `analyze_pre_chamber` (zone masses from exported masses, exported temperatures, or the orifice model integrated from the trapped mass), `pre_chamber_metrics` (pressure difference, jet start/end, jet mass, peak jet flow, choked share, heat release of both volumes and pre-chamber share, burn fractions), and `estimate_discharge_coefficient`.
 - `[pre_chamber]` table in case files (`PreChamberInput`), `combusta prechamber`, `write_pre_chamber_report`, `plot_pre_chamber`.
