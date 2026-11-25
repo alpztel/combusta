@@ -641,7 +641,7 @@ pytest -m strict_audit # analytical audits
 pyrefly check          # static type check
 ```
 
-Continuous integration runs the type check and the test suite (which also runs the altitude example end to end) on Python 3.11, 3.12, and 3.13 for every pull request and every push to `main`; CodeQL scans the code and Dependabot keeps dependencies current. Pull requests into `main` require all three test jobs to pass. Releases are built and attested by the release workflow. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the code of conduct, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) and the [releases page](https://github.com/alpztel/combusta/releases) for the version history.
+Continuous integration runs the type check and the test suite (which also runs the altitude example end to end) on Python 3.11, 3.12, and 3.13 for every pull request and every push to `main`; CodeQL scans the code and Dependabot keeps dependencies current. Pull requests into `main` require all three test jobs to pass. Releases are built and attested by the release workflow. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the code of conduct, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, [ACCESSIBILITY.md](ACCESSIBILITY.md) for the accessibility of outputs and documentation, and [CHANGELOG.md](CHANGELOG.md) and the [releases page](https://github.com/alpztel/combusta/releases) for the version history.
 
 ## How to cite
 
