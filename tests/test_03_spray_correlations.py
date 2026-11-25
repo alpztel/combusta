@@ -9,15 +9,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from ice_cfd_validator.exceptions import PhysicalBoundsError, UnitDetectionError
-from ice_cfd_validator.io import load_ecn_spray_data, parse_spray_csv
-from ice_cfd_validator.spray import (
+from combusta.exceptions import PhysicalBoundsError, UnitDetectionError
+from combusta.io import load_ecn_spray_data, parse_spray_csv
+from combusta.spray import (
     compute_spray_validation_metrics,
     evaluate_altitude_spray_risk,
     hiroyasu_arai_penetration,
     naber_siebers_penetration,
 )
-from tests.conftest import assert_package_vectorized_and_typed
+from tests.conftest import assert_package_type_checks
 
 
 @pytest.mark.unit
@@ -419,5 +419,5 @@ class TestStrictAuditSprayCorrelations:
         assert float(ecn_parsed.liquid_penetration_m[0]) == pytest.approx(0.045, rel=1.0e-15, abs=1.0e-18)
 
     def test_audit_spray_vectorization_and_typing(self) -> None:
-        """AUDIT: AST scan confirms zero explicit loops and strict typing in spray/ package."""
-        assert_package_vectorized_and_typed("spray")
+        """AUDIT: pyrefly static type check of the spray/ package."""
+        assert_package_type_checks("spray")

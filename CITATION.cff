@@ -1,7 +1,7 @@
 cff-version: 1.2.0
-message: "If you use ice-cfd-validation-assistant in academic research, CFD verification reports, or engineering publications, please cite it using the metadata below."
+message: "If you use combusta in academic research, CFD verification reports, or engineering publications, please cite it using the metadata below."
 type: software
-title: "ice-cfd-validation-assistant: Open-Source 0D/1D ICE Thermodynamic Diagnostics, High-Altitude Aero-Diesel Spray Physics, Auto-Ignition Kinetics, Second-Law Exergy Budgets, and ASME V&V 20-2009 3D CFD Validation Toolkit"
+title: "Combusta: Fuel-Agnostic Engine Combustion Analysis, Case Comparison, and Verification & Validation Toolkit"
 abstract: >-
   Strictly SI-normalized, vectorized Python 3.11+ engineering library for
   post-processing ANSYS Forte 3D internal combustion engine CFD simulations and

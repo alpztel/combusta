@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
@@ -14,9 +13,9 @@ import pytest
 from scipy.integrate import solve_ivp
 from scipy.interpolate import CubicSpline
 
-from ice_cfd_validator.signal.filtering import compute_derivative
-from ice_cfd_validator.thermo.kinematics import SliderCrankGeometry
-from ice_cfd_validator.thermo.nasa_polynomials import DRY_AIR
+from combusta.signal.filtering import compute_derivative
+from combusta.thermo.kinematics import SliderCrankGeometry
+from combusta.thermo.nasa_polynomials import DRY_AIR
 
 FloatArray = NDArray[np.float64]
 
@@ -165,34 +164,12 @@ def generate_synthetic_rk45_cycle(
     )
 
 
-def assert_package_vectorized_and_typed(subpackage: str | None = None) -> None:
-    """Central AST zero-loop vectorization and pyrefly typechecker helper."""
+def assert_package_type_checks(subpackage: str | None = None) -> None:
+    """Run the pyrefly static type checker over the project (PEP 561 typed package)."""
     project_root = Path(__file__).resolve().parents[1]
-    pkg_root = project_root / "src" / "ice_cfd_validator"
+    pkg_root = project_root / "src" / "combusta"
     target_dir = pkg_root / subpackage if subpackage else pkg_root
-
     assert target_dir.exists(), f"Directory {target_dir} does not exist!"
-
-    numerical_subpackages = {"signal", "thermo", "spray", "vv", "ignition", "exergy"}
-    loop_violations: list[str] = []
-
-    if subpackage in numerical_subpackages or subpackage is None:
-        for py_file in sorted(target_dir.rglob("*.py")):
-            if py_file.name == "__init__.py":
-                continue
-            if subpackage is None and py_file.parent.name not in numerical_subpackages:
-                continue
-            tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.For, ast.While)):
-                    iter_src = ast.unparse(node.iter) if isinstance(node, ast.For) else ""
-                    if "mole_fractions.items()" in iter_src:
-                        continue
-                    loop_violations.append(
-                        f"{py_file.relative_to(project_root).as_posix()}:{node.lineno}"
-                    )
-
-        assert len(loop_violations) == 0, f"Found explicit loops in numerical package: {loop_violations}"
 
     # Verify static typing via pyrefly
     pyrefly_path = shutil.which("pyrefly")

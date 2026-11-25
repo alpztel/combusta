@@ -31,7 +31,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from ice_cfd_validator import (  # noqa: E402
+from combusta import (  # noqa: E402
     DRY_AIR,
     FEET_TO_M,
     PREDEFINED_FUELS,

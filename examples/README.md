@@ -1,6 +1,6 @@
 # Examples & End-to-End Engineering Showcases
 
-This directory contains executable, strictly non-proprietary post-processing and verification workflows demonstrating the full capabilities of **`ice-cfd-validation-assistant`**.
+This directory contains executable, strictly non-proprietary post-processing and verification workflows demonstrating the full capabilities of **`combusta`**.
 
 ## Available Workflows
 

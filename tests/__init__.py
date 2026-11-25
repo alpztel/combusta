@@ -1,4 +1,4 @@
-"""Unit and analytical verification tests for ``ice_cfd_validator``."""
+"""Unit and analytical verification tests for ``combusta``."""
 
 from __future__ import annotations
 
