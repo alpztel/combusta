@@ -174,7 +174,12 @@ class EngineCase:
     source : {"cfd", "test_bench", "model_1d", "synthetic"}
         Data provenance. ``"synthetic"`` marks verification fixtures only.
     scalars : Mapping[str, float]
-        Scalar results not resolved in crank angle (e.g. ``"NOx_ppm_evo"``).
+        Scalar results not resolved in crank angle, compared as given.
+    emissions_kg_per_cycle : Mapping[str, float]
+        Exhaust species mass per cycle and cylinder [kg], e.g. ``{"NOx": ..., "H2": ...}``
+        (NOx as NO2 equivalent). Converted to specific emissions, emission indices, and
+        combustion efficiency by :func:`combusta.compare.compute_cycle_metrics`. Use
+        :func:`combusta.emissions.species_mass_from_mole_fraction` for ppm values.
     metadata : Mapping[str, str]
         Free-form provenance (solver version, mesh, file path, ...).
     """
@@ -185,12 +190,17 @@ class EngineCase:
     trace: CycleTrace
     source: CaseSource
     scalars: Mapping[str, float] = field(default_factory=dict)
+    emissions_kg_per_cycle: Mapping[str, float] = field(default_factory=dict)
     metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.source not in ("cfd", "test_bench", "model_1d", "synthetic"):
             raise ValueError(f"Unknown case source '{self.source}'.")
         object.__setattr__(self, "scalars", {k: float(v) for k, v in self.scalars.items()})
+        emissions = {k: float(v) for k, v in self.emissions_kg_per_cycle.items()}
+        if any(not np.isfinite(v) or v < 0.0 for v in emissions.values()):
+            raise PhysicalBoundsError("Emission masses must be finite and >= 0 kg.")
+        object.__setattr__(self, "emissions_kg_per_cycle", emissions)
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     @property
@@ -247,6 +257,7 @@ class EngineCase:
         geometry: SliderCrankGeometry,
         operating_point: OperatingPoint,
         scalars: Mapping[str, float] | None = None,
+        emissions_kg_per_cycle: Mapping[str, float] | None = None,
         metadata: Mapping[str, str] | None = None,
         wall_heat_loss_sign: float = 1.0,
     ) -> EngineCase:
@@ -280,5 +291,6 @@ class EngineCase:
             trace=trace,
             source="cfd",
             scalars=dict(scalars or {}),
+            emissions_kg_per_cycle=dict(emissions_kg_per_cycle or {}),
             metadata=meta,
         )
