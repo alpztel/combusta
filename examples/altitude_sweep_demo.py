@@ -7,7 +7,7 @@ non-proprietary textbook parameters across seven coupled engineering disciplines
   2. Closed-cycle First-Law ODE synthesis + zero-phase filtering + Heywood AHRR,
      CA10/CA50/CA90 combustion phasing, and indicated mean effective pressure (IMEP)
   3. High-altitude Jet-A1/Diesel spray penetration scaling (Hiroyasu-Arai 1990 &
-     Siebers 1999) and piston-bowl wall impingement risk detection
+     Naber-Siebers 1996) and piston-bowl wall impingement risk detection
   4. Three-mesh ASME V&V 20-2009 / Celik et al. (2008) Grid Convergence Index (GCI)
   5. Dynamic Livengood-Wu (1955) auto-ignition delay & sub-degree SOC prediction
   6. Second-Law exergy budgets across altitude-varying dead states (P0(z), T0(z))

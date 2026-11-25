@@ -3,7 +3,7 @@ r"""Aero-Diesel auto-ignition kinetics, Livengood-Wu integral, and CFD ignition 
 Provides, in strict SI units and fully vectorized form:
 
 1. Cetane-number-dependent apparent activation energy and global Hardenberg &
-   Hase (1979) ignition delay with high-altitude misfire threshold guard.
+   Hase (1979) ignition delay with a guard at its 1.24 MPa validity limit.
 2. Instantaneous-state Arrhenius delay correlations (Wolfer 1938, Assanis et
    al. 2003) with cetane-number activation energy scaling and standard
    fuel profiles (EN590 Diesel, Jet-A1/JP-8, Synthetic FT-SPK).

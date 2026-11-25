@@ -101,7 +101,7 @@ class AltitudeSprayPlotCase:
     hiroyasu_penetration_m : NDArray[np.float64]
         Hiroyasu & Arai (1990) spray tip penetration $S_{\\text{HA}}(t)$ [m].
     siebers_penetration_m : NDArray[np.float64]
-        Naber & Siebers (1996) / Siebers (1999) penetration $S_{\\text{NS}}(t)$ [m].
+        Naber & Siebers (1996) penetration $S_{\\text{NS}}(t)$ [m].
     cfd_time_s : NDArray[np.float64] | None, optional
         Discrete ANSYS Forte CFD sample timestamps $t_{\\text{CFD}}$ [s].
     cfd_penetration_m : NDArray[np.float64] | None, optional
@@ -463,7 +463,7 @@ def plot_altitude_spray_comparison(
     Parameters
     ----------
     cases : Sequence[AltitudeSprayPlotCase]
-        Ordered altitude scenarios containing Hiroyasu-Arai (1990), Siebers (1999),
+        Ordered altitude scenarios containing Hiroyasu-Arai (1990), Naber & Siebers (1996),
         and optional ANSYS Forte CFD spray penetration curves.
     wall_distance_m : float
         Piston bowl / cylinder liner radial clearance $L_{\\text{wall}}$ [m].
@@ -517,7 +517,7 @@ def plot_altitude_spray_comparison(
                 lw=1.45,
                 ls="--",
                 alpha=0.82,
-                label=f"{case.label} — Siebers (1999)",
+                label=f"{case.label} — Naber & Siebers (1996)",
             )
 
             if case.cfd_time_s is not None and case.cfd_penetration_m is not None:

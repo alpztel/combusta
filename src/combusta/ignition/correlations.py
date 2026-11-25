@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final, Literal, TypeAlias
+import warnings
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -58,8 +59,9 @@ CETANE_REFERENCE: Final[float] = 50.0
 """Reference cetane number for Arrhenius activation-energy scaling [-]."""
 
 HH_MISFIRE_MESSAGE: Final[str] = (
-    "P_TDC lies below the Hardenberg-Hase 1.24 MPa physical auto-ignition "
-    "threshold (high-altitude misfire regime)."
+    "P_TDC <= 1.24 MPa is outside the validity range of the Hardenberg-Hase "
+    "correlation (its pressure term is singular there). This is a limit of the "
+    "empirical fit, not a physical auto-ignition limit."
 )
 
 
@@ -229,24 +231,24 @@ def hardenberg_hase_delay(
     rpm: float,
     cetane_number: float,
     *,
-    pressure_coupling: PressureCoupling = "additive",
+    pressure_coupling: PressureCoupling = "multiplicative",
 ) -> HardenbergHaseResult:
     """Evaluate the Hardenberg & Hase (1979) global ignition delay.
 
-    Following Heywood (2018, Eq. 10.37) and the project specification, with
-    $P_{TDC}$ supplied in SI units and converted internally to bar
+    Published form (Hardenberg & Hase, 1979, SAE 790493; Heywood, 2018, Eq. 10.37),
+    with $P_{TDC}$ supplied in SI units and converted internally to bar
     ($P_{\\text{bar}} = 10^{-5} P_{TDC}$):
 
     $$\\Delta\\theta_{id} = (0.36 + 0.22\\,\\bar{S}_p)
       \\exp\\left[E_a\\left(\\frac{1}{R_u T_{TDC}} - \\frac{1}{17190}\\right)
-      + \\left(\\frac{21.2}{P_{\\text{bar}} - 12.4}\\right)^{0.63}\\right] \\quad [\\text{deg}]$$
+      \\left(\\frac{21.2}{P_{\\text{bar}} - 12.4}\\right)^{0.63}\\right] \\quad [\\text{deg}]$$
 
     $$\\tau_{id} = \\frac{\\Delta\\theta_{id}}{6\\,\\text{RPM}} \\quad [\\text{s}]$$
 
     where $17190$ J/mol is the original reference molar energy $R_u T_{\\text{ref}}$ and
-    $R_u = 8.314462618$ J/(mol K). A multiplicative coupling
-    (``pressure_coupling="multiplicative"``) is also supported:
-    $\\exp\\left[E_a(1/(R_u T) - 1/17190) \\cdot (21.2/(P-12.4))^{0.63}\\right]$.
+    $R_u = 8.314462618$ J/(mol K). ``pressure_coupling="additive"`` (sum instead of
+    product of the two terms) is not the published correlation; it is kept only to
+    reproduce results of Combusta <= 0.2.0 and emits a ``DeprecationWarning``.
 
     Parameters
     ----------
@@ -260,9 +262,9 @@ def hardenberg_hase_delay(
         Engine speed [rev/min].
     cetane_number : float
         Fuel cetane number $CN$ [-].
-    pressure_coupling : {"additive", "multiplicative"}, optional
-        Coupling between the thermal activation and pressure term in the
-        exponent (default ``"additive"`` per project specification).
+    pressure_coupling : {"multiplicative", "additive"}, optional
+        ``"multiplicative"`` (default) is the published correlation; ``"additive"``
+        is deprecated (see above).
 
     Returns
     -------
@@ -272,8 +274,9 @@ def hardenberg_hase_delay(
     Raises
     ------
     ValueError
-        If any $P_{TDC} \\le 1.24$ MPa, where the pressure term is singular or
-        complex (high-altitude misfire regime).
+        If any $P_{TDC} \\le 1.24$ MPa, where the pressure term of the correlation
+        is singular. This is a validity limit of the empirical fit, not a physical
+        auto-ignition or misfire limit.
     PhysicalBoundsError
         For non-positive temperature, speed, or negative piston speed.
     """
@@ -299,10 +302,18 @@ def hardenberg_hase_delay(
     thermal_term = e_a * (1.0 / (R_UNIVERSAL * t_k) - 1.0 / HH_REFERENCE_RT_J_PER_MOL)
     pressure_term = (21.2 / (p_bar - HH_PRESSURE_THRESHOLD_BAR)) ** 0.63
 
-    if pressure_coupling == "additive":
+    if pressure_coupling == "multiplicative":
+        exponent = thermal_term * pressure_term
+    elif pressure_coupling == "additive":
+        warnings.warn(
+            "pressure_coupling='additive' is not the published Hardenberg-Hase correlation "
+            "and will be removed; use the default 'multiplicative' form.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         exponent = thermal_term + pressure_term
     else:
-        exponent = thermal_term * pressure_term
+        raise ValueError(f"Unknown pressure_coupling '{pressure_coupling}'.")
 
     delay_deg = (0.36 + 0.22 * sp) * np.exp(exponent)
     delay_s = delay_deg / (6.0 * rpm_f)

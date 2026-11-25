@@ -170,6 +170,7 @@ class TestValidationVV20:
         phi = [10.0 + 2.0 * x**2 for x in h]
         gci = compute_gci(phi[0], phi[1], phi[2], h1=h[0], h2=h[1], h3=h[2])
         assert numerical_uncertainty_from_gci(gci) == pytest.approx(uncertainty_from_gci(gci) / 1.15, rel=1e-12)
-        divergent = compute_gci(10.0, 12.0, 12.5, r21=1.5, r32=1.5)
+        with pytest.warns(UserWarning, match="Divergent"):
+            divergent = compute_gci(10.0, 12.0, 12.5, r21=1.5, r32=1.5)
         with pytest.raises(PhysicalBoundsError):
             numerical_uncertainty_from_gci(divergent)

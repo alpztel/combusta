@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Hardenberg–Hase ignition delay** now uses the published form, in which the temperature and pressure terms multiply inside the exponent (Hardenberg & Hase, 1979; Heywood, 2018, Eq. 10.37). The former default added them, which lengthened delays by a factor of about 2.3 at typical conditions (0.46 ms vs. 0.20 ms at 900 K, 60 bar, CN 50). `pressure_coupling="additive"` remains for reproducing old results and emits a `DeprecationWarning`.
+- The 1.24 MPa Hardenberg–Hase limit is described as the validity limit of the correlation (its pressure term is singular), no longer as a physical auto-ignition or misfire threshold.
+- **Exergy budget**: exergy destruction is now computed from entropy generation (Gouy–Stodola) instead of as the balance residual, so `closure_error_j` is a real consistency check of the inputs (it was zero by construction). New `balance_residual_rate_j_per_deg`, `e_released_j`, `e_unreleased_j`, and `unreleased_share_pct`. Thermomechanical exergy is no longer clipped at zero.
+- **GCI**: divergent triplets emit a `UserWarning`; the new `formal_order` argument caps an apparent order above the formal order of the scheme (Roache, 1998), reported via `order_used_p` and `order_limited`.
+- Naber & Siebers (1996) penetration was mislabeled "Siebers (1999)"; Siebers (1999) is the liquid-length scaling, which is not implemented. The altitude spray risk docstring now states that tip penetration is not a liquid wall-wetting criterion.
+- `compute_knock_metrics` documents that MAPO needs a local pressure signal; spatially averaged CFD pressure is not suitable.
+
 ### Changed
 - Project renamed from `ice-cfd-validation-assistant` / `ice_cfd_validator` to **Combusta** (`combusta`), reflecting the move to a fuel-agnostic engine analysis, case comparison, and V&V toolkit. The GitHub repository is now `alpztel/combusta`; old URLs redirect.
 - Base exception renamed to `CombustaError`; `ValidationAssistantError` remains as an alias.

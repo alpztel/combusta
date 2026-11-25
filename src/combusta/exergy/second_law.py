@@ -44,7 +44,13 @@ class ExergyRatesResult:
     combustion_source_exergy_rate_j_per_deg : FloatArray
         Fuel combustion chemical/thermal exergy input rate $dE_{\\text{in}}/d\\theta = \\varphi \\cdot dQ_{\\text{gross}}/d\\theta$ [$\\text{J/deg}$].
     exergy_destruction_rate_j_per_deg : FloatArray
-        Instantaneous irreversibility / exergy destruction rate $dE_{\\text{dest}}/d\\theta$ [$\\text{J/deg}$].
+        Exergy destruction rate from entropy generation (Gouy-Stodola),
+        independent of the exergy balance [$\\text{J/deg}$].
+    balance_residual_rate_j_per_deg : FloatArray
+        Residual of the exergy balance
+        $dE_{in} - dE_W - dE_Q - dE_{tm} - dE_{dest}$ [$\\text{J/deg}$]; zero (to
+        discretization error) when pressure, temperature, and heat-release inputs are
+        mutually consistent with the First Law.
     cumulative_work_exergy_j : FloatArray
         Cumulative net indicated work exergy $E_W(\\theta)$ [$\\text{J}$].
     cumulative_heat_loss_exergy_j : FloatArray
@@ -53,6 +59,8 @@ class ExergyRatesResult:
         Cumulative fuel exergy input $E_{\\text{in}}(\\theta)$ [$\\text{J}$].
     cumulative_exergy_destruction_j : FloatArray
         Cumulative irreversibility / exergy destroyed $E_{\\text{dest}}(\\theta)$ [$\\text{J}$].
+    cumulative_balance_residual_j : FloatArray
+        Cumulative balance residual [$\\text{J}$].
     """
 
     crank_angle_deg: FloatArray
@@ -65,6 +73,8 @@ class ExergyRatesResult:
     cumulative_heat_loss_exergy_j: FloatArray
     cumulative_combustion_source_exergy_j: FloatArray
     cumulative_exergy_destruction_j: FloatArray
+    balance_residual_rate_j_per_deg: FloatArray
+    cumulative_balance_residual_j: FloatArray
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,9 +106,18 @@ class ExergyCycleBudget:
     destruction_share_pct : float
         Exergy destruction percentage share of fuel chemical input [$\\%$].
     budget_closure_pct : float
-        Total percentage budget closure (must equal $100.0000\\%$) [$\\%$].
+        $100 (E_W + E_Q + \\Delta E_{tm} + E_{dest} + E_{unreleased}) / E_{in,fuel}$ [$\\%$];
+        differs from 100 % by the closure error.
     closure_error_j : float
-        Absolute balance closure error $|E_{\\text{in}} - \\sum E_{\\text{out}}|$ [$\\text{J}$].
+        $|E_{released} - (E_W + E_Q + \\Delta E_{tm} + E_{dest})|$ [$\\text{J}$] with the
+        destruction from entropy generation, i.e. a real check of input consistency.
+    e_released_j : float
+        Exergy released by combustion $\\varphi \\int dQ_{gross}$ in the window [$\\text{J}$].
+    e_unreleased_j : float
+        Fuel exergy not released as heat in the window, $E_{in,fuel} - E_{released}$
+        (incomplete combustion and heat-release modeling error) [$\\text{J}$].
+    unreleased_share_pct : float
+        $E_{unreleased}$ as a share of the fuel exergy [$\\%$].
     """
 
     e_in_fuel_j: float
@@ -114,6 +133,9 @@ class ExergyCycleBudget:
     destruction_share_pct: float
     budget_closure_pct: float
     closure_error_j: float
+    e_released_j: float = 0.0
+    e_unreleased_j: float = 0.0
+    unreleased_share_pct: float = 0.0
 
 
 def compute_standard_entropy(
@@ -240,11 +262,8 @@ def compute_thermomechanical_exergy(
     e_tm_spec = delta_u + p0 * delta_v - t0 * delta_s
     e_tm_j = trapped_mass_kg * e_tm_spec
 
-    # Thermodynamic convexity guard: Gibbs convexity dictates E_tm >= 0 identically
-    # Microscopic negative values arising from floating-point roundoff are clamped to 0.0
-    dead_state_mask = np.isclose(t, t0, atol=1e-11) & np.isclose(p, p0, atol=1e-8)
-    e_tm_j = np.where(dead_state_mask, 0.0, np.maximum(e_tm_j, 0.0))
-
+    # No clipping: E_tm >= 0 holds for an ideal gas, so a negative value signals an
+    # inconsistent input state and must stay visible.
     return np.asarray(e_tm_j, dtype=np.float64)
 
 
@@ -270,9 +289,15 @@ def compute_exergy_rates(
     - Wall heat loss exergy transfer: $dE_{Q,\\text{loss}}/d\\theta = (1 - T_0 / T_w) dQ_{ht}/d\\theta$ [$\\text{J/deg}$].
     - Combustion fuel exergy input rate: $dE_{\\text{in}}/d\\theta = \\varphi \\cdot dQ_{\\text{gross}}/d\\theta$ [$\\text{J/deg}$].
     - Control volume thermomechanical exergy $E_{tm}(\\theta)$ and derivative $dE_{tm}/d\\theta$ [$\\text{J/deg}$].
-    - Exergy destruction rate via closed-system availability balance:
-      $$\\frac{dE_{\\text{dest}}}{d\\theta} = \\frac{dE_{\\text{in}}}{d\\theta} - \\frac{dE_W}{d\\theta}
-        - \\frac{dE_{Q,\\text{loss}}}{d\\theta} - \\frac{dE_{tm}}{d\\theta} \\quad [\\text{J/deg}]$$
+    - Exergy destruction rate from entropy generation (Gouy-Stodola,
+      $dE_{dest} = T_0\\,dS_{gen}$), with combustion modeled as heat release at the gas
+      temperature $T$ and wall heat transfer across $T \\to T_w$
+      (Rakopoulos & Giakoumis, 2006; Caton, 2000):
+      $$\\frac{dE_{\\text{dest}}}{d\\theta} = \\left(\\varphi - 1 + \\frac{T_0}{T}\\right)\\frac{dQ_{\\text{gross}}}{d\\theta}
+        + T_0\\left(\\frac{1}{T_w} - \\frac{1}{T}\\right)\\frac{dQ_{ht}}{d\\theta}$$
+    - Balance residual $dE_{in} - dE_W - dE_Q - dE_{tm} - dE_{dest}$, which vanishes only
+      when the inputs satisfy the First Law with the chosen gas model. It is therefore a
+      genuine consistency check, not an identity.
 
     Parameters
     ----------
@@ -343,14 +368,22 @@ def compute_exergy_rates(
     )
     de_tm_dtheta = compute_derivative(theta, e_tm)
 
-    # 5. Exergy destruction rate: dE_dest / dtheta = dE_in - dE_W - dE_Q,loss - dE_tm
-    de_dest_dtheta = de_in_dtheta - de_work_dtheta - de_heat_loss_dtheta - de_tm_dtheta
+    # 5. Exergy destruction from entropy generation (Gouy-Stodola), independent of step 4
+    if np.any(t <= 0.0):
+        raise PhysicalBoundsError("Gas temperature must be strictly positive (> 0 K).")
+    de_dest_dtheta = (phi_factor - 1.0 + t0 / t) * dq_gross + t0 * (
+        1.0 / wall_temperature_k - 1.0 / t
+    ) * dq_ht
+
+    # 6. Exergy balance residual (consistency check of the inputs)
+    de_residual = de_in_dtheta - de_work_dtheta - de_heat_loss_dtheta - de_tm_dtheta - de_dest_dtheta
 
     # Cumulative integrals via trapezoidal rule with initial=0
     cum_work = np.asarray(cumulative_trapezoid(de_work_dtheta, theta, initial=0), dtype=np.float64)
     cum_heat_loss = np.asarray(cumulative_trapezoid(de_heat_loss_dtheta, theta, initial=0), dtype=np.float64)
     cum_in = np.asarray(cumulative_trapezoid(de_in_dtheta, theta, initial=0), dtype=np.float64)
     cum_dest = np.asarray(cumulative_trapezoid(de_dest_dtheta, theta, initial=0), dtype=np.float64)
+    cum_residual = np.asarray(cumulative_trapezoid(de_residual, theta, initial=0), dtype=np.float64)
 
     return ExergyRatesResult(
         crank_angle_deg=theta,
@@ -363,6 +396,8 @@ def compute_exergy_rates(
         cumulative_heat_loss_exergy_j=cum_heat_loss,
         cumulative_combustion_source_exergy_j=cum_in,
         cumulative_exergy_destruction_j=cum_dest,
+        balance_residual_rate_j_per_deg=de_residual,
+        cumulative_balance_residual_j=cum_residual,
     )
 
 
@@ -383,7 +418,10 @@ def compute_exergy_cycle_budget(
     - Net indicated work exergy: $E_{W,\\text{net}} = \\int (P - P_0) dV$ [$\\text{J}$].
     - Wall heat transfer exergy loss: $E_{Q,\\text{loss}} = \\int (1 - T_0 / T_w) dQ_{ht}$ [$\\text{J}$].
     - Fluid internal exergy difference: $\\Delta E_{tm,\\text{exhaust}} = E_{tm}(\\theta_{\\text{EVO}}) - E_{tm}(\\theta_{\\text{IVC}})$ [$\\text{J}$].
-    - Cycle exergy destroyed: $E_{\\text{destroyed}} = E_{\\text{in,fuel}} - E_{W,\\text{net}} - E_{Q,\\text{loss}} - \\Delta E_{tm,\\text{exhaust}}$ [$\\text{J}$].
+    - Cycle exergy destroyed $E_{\\text{destroyed}} = \\int T_0\\,dS_{gen}$ from
+      :func:`compute_exergy_rates` (not a balance residual).
+    - Released exergy $E_{released} = \\varphi \\int dQ_{gross}$ and the unreleased part
+      $E_{in,fuel} - E_{released}$.
     - First Law efficiency: $\\eta_I = W_{\\text{ind}} / (m_f \\cdot LHV)$ [-].
     - Second Law efficiency: $\\eta_{II} = E_{W,\\text{net}} / E_{\\text{in,fuel}}$ [-].
 
@@ -407,7 +445,7 @@ def compute_exergy_cycle_budget(
     Returns
     -------
     ExergyCycleBudget
-        Populated immutable budget dataclass with $100.0000\\%$ balance closure.
+        Budget with an independent closure check (``closure_error_j``).
     """
     if fuel_mass_kg <= 0.0 or lhv_j_per_kg <= 0.0 or phi_factor <= 0.0:
         raise PhysicalBoundsError("Fuel mass, LHV, and phi factor must be strictly positive.")
@@ -424,6 +462,8 @@ def compute_exergy_cycle_budget(
     sub_theta = theta[idx_start : idx_end + 1]
     sub_de_w = de_w[idx_start : idx_end + 1]
     sub_de_q = de_q[idx_start : idx_end + 1]
+    sub_de_in = rates_result.combustion_source_exergy_rate_j_per_deg[idx_start : idx_end + 1]
+    sub_de_dest = rates_result.exergy_destruction_rate_j_per_deg[idx_start : idx_end + 1]
 
     # Integrated terms
     e_in_fuel = float(fuel_mass_kg * phi_factor * lhv_j_per_kg)
@@ -431,8 +471,10 @@ def compute_exergy_cycle_budget(
     e_heat_loss = float(trapezoid(sub_de_q, sub_theta))
     delta_e_tm = float(e_tm[idx_end] - e_tm[idx_start])
 
-    # Irreversibility from closed balance
-    e_destroyed = float(e_in_fuel - e_work_net - e_heat_loss - delta_e_tm)
+    # Independent terms: released exergy and entropy-generation destruction
+    e_released = float(trapezoid(sub_de_in, sub_theta))
+    e_unreleased = e_in_fuel - e_released
+    e_destroyed = float(trapezoid(sub_de_dest, sub_theta))
 
     # Indicated work and efficiencies
     w_ind = float(indicated_work_j) if indicated_work_j is not None else e_work_net
@@ -444,9 +486,10 @@ def compute_exergy_cycle_budget(
     heat_loss_share = float((e_heat_loss / e_in_fuel) * 100.0)
     exhaust_share = float((delta_e_tm / e_in_fuel) * 100.0)
     destruction_share = float((e_destroyed / e_in_fuel) * 100.0)
+    unreleased_share = float((e_unreleased / e_in_fuel) * 100.0)
 
-    total_shares = work_share + heat_loss_share + exhaust_share + destruction_share
-    closure_err = abs(e_in_fuel - (e_work_net + e_heat_loss + delta_e_tm + e_destroyed))
+    total_shares = work_share + heat_loss_share + exhaust_share + destruction_share + unreleased_share
+    closure_err = abs(e_released - (e_work_net + e_heat_loss + delta_e_tm + e_destroyed))
 
     return ExergyCycleBudget(
         e_in_fuel_j=e_in_fuel,
@@ -462,4 +505,7 @@ def compute_exergy_cycle_budget(
         destruction_share_pct=destruction_share,
         budget_closure_pct=total_shares,
         closure_error_j=closure_err,
+        e_released_j=e_released,
+        e_unreleased_j=e_unreleased,
+        unreleased_share_pct=unreleased_share,
     )

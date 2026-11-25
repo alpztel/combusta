@@ -195,7 +195,8 @@ class TestUncertaintyFromGCI:
         assert abs(phi[0] - 10.0) < u
 
     def test_divergent_triplet_is_rejected(self) -> None:
-        gci = compute_gci(10.0, 12.0, 12.5, r21=1.5, r32=1.5)  # eps21 > eps32: R = 4
+        with pytest.warns(UserWarning, match="Divergent"):
+            gci = compute_gci(10.0, 12.0, 12.5, r21=1.5, r32=1.5)  # eps21 > eps32: R = 4
         assert gci.convergence_regime == "DIVERGENT"
         with pytest.raises(PhysicalBoundsError):
             uncertainty_from_gci(gci)

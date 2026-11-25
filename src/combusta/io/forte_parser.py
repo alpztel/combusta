@@ -406,7 +406,7 @@ def parse_spray_csv(
     """Parse ANSYS Forte ``spray.csv`` and convert penetration/time arrays to SI.
 
     Converts liquid/vapor penetration and droplet SMD to meters [m] and time to
-    seconds [s] for Hiroyasu & Arai (1990) and Siebers (1999) scaling validation.
+    seconds [s] for Hiroyasu & Arai (1990) and Naber & Siebers (1996) scaling validation.
     When ``Time`` is absent from ``spray.csv``, elapsed time is computed from
     crank angle via $\\Delta t = (\\theta - \\theta_0) / (6\\,\\text{RPM})$.
 

@@ -1,8 +1,8 @@
 """High-altitude Aero-Diesel spray penetration, scaling, and wall-impingement models.
 
 Implements vectorized Hiroyasu & Arai (1990, SAE Paper 900475) two-regime tip
-penetration, Naber & Siebers (1996, SAE Paper 960034) / Siebers (1999) vapor
-dispersion scaling, altitude gas-density wall-wetting risk diagnostics, and
+penetration, Naber & Siebers (1996, SAE Paper 960034) momentum-based
+penetration scaling, altitude gas-density wall-wetting risk diagnostics, and
 3D CFD vs. experimental error norms in strict SI units.
 """
 
@@ -46,7 +46,7 @@ class HiroyasuAraiResult:
 
 @dataclass(frozen=True, slots=True)
 class NaberSiebersResult:
-    """Naber & Siebers (1996) / Siebers (1999) non-vaporizing/vapor spray penetration.
+    """Naber & Siebers (1996) non-vaporizing/vapor spray penetration.
 
     Attributes
     ----------
@@ -268,7 +268,7 @@ def naber_siebers_penetration(
     cv: float = 1.0,
     method: NaberSiebersMethod = "exact",
 ) -> NaberSiebersResult:
-    """Compute vectorized Naber & Siebers (1996) / Siebers (1999) spray penetration.
+    """Compute vectorized Naber & Siebers (1996) spray penetration.
 
     Evaluates characteristic momentum scales (SAE Paper 960034, Eq. 12–21):
 
@@ -408,6 +408,13 @@ def evaluate_altitude_spray_risk(
     Compares in-cylinder gas density reduction ($\\rho_{g,1} \\to \\rho_{g,2}$) for
     Aero-Diesel operation and resolves exact wall-impingement onset time $t_{\\text{imp}}$
     against bowl/liner clearance $L_{\\text{wall}}$ [m].
+
+    Scope: both correlations give the *spray tip* penetration of a non-vaporizing
+    jet. In an evaporating diesel spray the liquid phase stops at a quasi-steady liquid
+    length (Siebers, 1999, SAE 1999-01-0528), usually well short of the tip. Liquid
+    wall wetting must therefore be judged against the liquid length, which this
+    function does not model; ``impingement_time_s`` is the arrival of the spray tip
+    (largely vapor) at ``wall_distance_m``.
 
     Parameters
     ----------

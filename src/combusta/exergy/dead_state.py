@@ -54,7 +54,7 @@ class DeadStateConditions:
     def __post_init__(self) -> None:
         if not (0.0 <= self.altitude_m <= 15000.0):
             raise PhysicalBoundsError(
-                f"Altitude {self.altitude_m} m exceeds valid ISA tropospheric domain [0, 15000] m."
+                f"Altitude {self.altitude_m} m is outside the supported dead-state range [0, 15000] m."
             )
         if self.p0_pa <= 0.0 or self.t0_k <= 0.0 or self.rho0_kg_per_m3 <= 0.0:
             raise PhysicalBoundsError("Dead state physical properties (P0, T0, rho0) must be strictly positive.")
