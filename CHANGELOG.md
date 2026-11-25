@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README: the GCI sign function uses `\mathrm{sgn}` (GitHub math does not allow `\operatorname`, so the equation block did not render); scope, Turkish summary, quick start (measurement uncertainty), package table, limitations, development notes, and citation version brought up to date.
 - CONTRIBUTING: module map, SI boundary rules for case files and reports, test-speed guidance; SECURITY: scope covers case files, generic traces, and written reports, and states that case files are trusted input; CODE_OF_CONDUCT: private reporting path clarified.
 - Issue and pull-request templates updated; a contact link to the case-file reference added.
+- `ACCESSIBILITY.md`: outputs, colour scheme, known limitations, and how to report barriers.
 - `benchmarks/README.md` rewritten as a local workspace for open reference data; data files in `benchmarks/` are ignored by Git.
 
 ## [0.4.0] - 2026-11-26
