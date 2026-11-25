@@ -171,7 +171,7 @@ from combusta.vv import (
     compute_grid_size,
 )
 
-__version__ = "0.3.0.dev0"
+__version__ = "0.3.0"
 
 __all__ = [
     "SPECIES_MOLAR_MASS",

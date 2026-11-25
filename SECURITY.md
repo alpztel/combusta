@@ -1,27 +1,43 @@
-# Security & Data Hygiene Policy
+# Security Policy
 
-## Supported Versions
+## Supported versions
+
+Combusta is maintained by a single developer. Security fixes are made only on the latest minor release line.
 
 | Version | Supported |
 | :--- | :---: |
-| `0.2.x` | ✅ (Active / Recommended) |
-| `0.1.x` | ✅ |
+| 0.3.x | Yes |
+| < 0.3 (released as `ice-cfd-validation-assistant`) | No |
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-If you discover a security issue (for example, unsafe file parsing, integer/floating-point division traps, or denial of service via malformed input CSV files) in `combusta`:
+Please **do not** report security problems in public issues, discussions, or pull requests.
 
-1. **Do not** open a public issue containing exploit payloads or crash files.
-2. Report the vulnerability privately via [GitHub Security Advisories](https://github.com/alpztel/combusta/security/advisories/new) with a minimal, synthetic reproduction snippet.
-3. You may expect an initial response within 48 hours and a patched release within 7 days.
+Report them privately through GitHub's [private vulnerability reporting](https://github.com/alpztel/combusta/security/advisories/new) ("Security" tab → "Report a vulnerability"). A useful report contains:
 
-## Numerical Safety & Boundary Sanitization
+- the affected version or commit,
+- a minimal reproduction built from **synthetic** data (see [Data hygiene](#data-hygiene)),
+- the observed and the expected behaviour, and
+- your assessment of the impact.
 
-`combusta` incorporates defensive programming across all physics routines:
-- **Strict Positivity Guards:** Spatially averaged cylinder pressure ($P > 0$), cylinder volume ($V > 0$), temperature ($T > 0$), trapped mass ($m > 0$), and AMR cell counts ($N_i > 0$) are strictly validated at ingestion to prevent non-physical floating-point overflows or square-root of negative numbers.
-- **Singularity Protection:** Hardenberg-Hase delay features an explicit guard for $`P_{\mathrm{TDC}} \le 1.24\ \mathrm{MPa}`$ ($12.4\ \mathrm{bar}$) to prevent logarithmic and fractional exponent singularities; ASME GCI incorporates Celik et al. (2008) sign factor $`s = \mathrm{sgn}(\epsilon_{32}/\epsilon_{21})`$ to safeguard against `NaN` crashes on oscillatory AMR mesh triplets; Livengood-Wu solver explicitly detects high-altitude subcritical misfire ($I(\theta) < 1.0$) returning `NaN` indicators rather than erroneous roots.
-- **Zero Memory Leaks:** Plotting routines run strictly headless via `FigureCanvasAgg` without contaminating the global `matplotlib.pyplot` state.
+This is a volunteer-maintained research project. Reports are handled on a best-effort basis: the maintainer aims to acknowledge a report within 14 days and to agree on a disclosure timeline with the reporter once the issue is confirmed. Confirmed vulnerabilities are fixed in a patch release and disclosed through a GitHub Security Advisory that credits the reporter, unless the reporter prefers to remain anonymous.
 
-## Strict NDA & Intellectual Property Hygiene
+## Scope
 
-`combusta` is an open-source academic and engineering verification library. Contributors and users opening issues or pull requests must **never** attach proprietary engine CAD geometries, OEM calibration tables, or confidential test-cell logs. Always reproduce bugs using synthetic analytical curves or open [Engine Combustion Network (ECN)](https://ecn.sandia.gov/) datasets.
+Combusta is a numerical library. It opens no network connections, runs no subprocesses, and does not deserialize pickled or otherwise executable data. Its attack surface is limited to the files it parses:
+
+- ANSYS Forte CSV exports (`combusta.io.forte_parser`),
+- Engine Combustion Network text tables (`combusta.io.ecn_loader`).
+
+In scope are, for example, crashes, excessive memory or CPU use, or path handling problems triggered by a crafted input file, and vulnerabilities in how Combusta uses its dependencies.
+
+Out of scope:
+
+- vulnerabilities in NumPy, SciPy, pandas, or Matplotlib themselves; report those upstream,
+- **numerically wrong results**. A wrong heat release, uncertainty, or correlation value is a correctness bug, not a security issue. Please open a regular [bug report](https://github.com/alpztel/combusta/issues/new/choose) and cite the reference you compare against.
+
+Dependency vulnerabilities are tracked with Dependabot, and the code is scanned with GitHub CodeQL.
+
+## Data hygiene
+
+Never attach proprietary or confidential material to an issue, pull request, or advisory: engine geometry or meshes, OEM calibration data, test-cell logs, ANSYS Forte project or restart files, or licensed tutorial files. Reproduce problems with synthetic traces (the test suite contains generators for them) or with openly licensed data such as the [Engine Combustion Network](https://ecn.sandia.gov/) archives.

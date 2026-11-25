@@ -1,0 +1,36 @@
+name: Physics / reference issue
+description: A formula, constant, unit, correlation, or citation that disagrees with the literature.
+title: "[Physics]: "
+labels: ["physics"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Combusta aims to be traceable to published sources. Use this form when a result disagrees with a reference, an equation is implemented incorrectly, or a citation is wrong.
+  - type: input
+    id: location
+    attributes:
+      label: Affected function or README section
+      placeholder: "combusta.thermo.heat_release.compute_heat_release, README §3"
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference
+      description: Full citation with equation, table, or page number (DOI if available).
+      placeholder: "Heywood, J. B. (2018). Internal Combustion Engine Fundamentals, 2nd ed., Eq. 9.25, p. 512."
+    validations:
+      required: true
+  - type: textarea
+    id: discrepancy
+    attributes:
+      label: Discrepancy
+      description: What Combusta computes, what the reference gives, and the conditions (inputs, units).
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Proposed check
+      description: A closed-form case or published value that a regression test could use.
