@@ -374,6 +374,6 @@ class TestStrictAuditIgnitionKinetics:
         assert np.isnan(res_single.theta_lthr_peak_deg)
         assert np.isnan(res_single.theta_ntc_deg)
 
-    def test_audit_ignition_vectorization_and_typing(self) -> None:
+    def test_audit_ignition_type_check(self) -> None:
         """AUDIT: pyrefly static type check of the ignition/ package."""
         assert_package_type_checks("ignition")

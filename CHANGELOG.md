@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- README rewritten: scope, quick start, package overview, a complete mathematical formulation, a verification table that names the reference of every check, assumptions and limitations, and a verified reference list. Third-party license notices moved from `LICENSE` (now the plain MIT text) into the README and corrected.
+- Corrected citations: Gatowski et al. (1984) is SAE 841359; Caton (2000) is SAE 2000-01-1081; Rakopoulos & Giakoumis (2006) is a review in *Progress in Energy and Combustion Science*; the 2008 TDC paper by Pipitone et al. is SAE 2008-36-0059.
+- `CITATION.cff` rewritten and validated against the CFF 1.2.0 schema.
+
+### Changed (example)
+- `examples/altitude_sweep_demo.py` rewritten: start of combustion now comes from the Livengood-Wu prediction on the motored state (it previously started before the predicted ignition), the turbocharger holds manifold pressure up to a critical altitude, the GCI figure is labeled as a manufactured example, and synthetic spray samples are no longer labeled as Forte output.
+
 ### Fixed
 - **Hardenberg–Hase ignition delay** now uses the published form, in which the temperature and pressure terms multiply inside the exponent (Hardenberg & Hase, 1979; Heywood, 2018, Eq. 10.37). The former default added them, which lengthened delays by a factor of about 2.3 at typical conditions (0.46 ms vs. 0.20 ms at 900 K, 60 bar, CN 50). `pressure_coupling="additive"` remains for reproducing old results and emits a `DeprecationWarning`.
 - The 1.24 MPa Hardenberg–Hase limit is described as the validity limit of the correlation (its pressure term is singular), no longer as a physical auto-ignition or misfire threshold.

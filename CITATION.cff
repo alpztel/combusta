@@ -1,24 +1,19 @@
 cff-version: 1.2.0
-message: "If you use combusta in academic research, CFD verification reports, or engineering publications, please cite it using the metadata below."
+message: "If you use Combusta in research, theses, or engineering reports, please cite it using the metadata below."
 type: software
 title: "Combusta: Fuel-Agnostic Engine Combustion Analysis, Case Comparison, and Verification & Validation Toolkit"
 abstract: >-
-  Strictly SI-normalized, vectorized Python 3.11+ engineering library for
-  post-processing ANSYS Forte 3D internal combustion engine CFD simulations and
-  Sandia Engine Combustion Network (ECN) spray datasets. Provides automated
-  unit-safe ingestion, zero-phase pressure filtering, 4th-order non-uniform
-  differentiation, 14-coefficient (2x7-term) NASA Glenn thermodynamic polynomials, Woschni
-  and Hohenberg wall heat-transfer models, Heywood single-zone First-Law
-  apparent and gross heat release rate (AHRR), sub-degree CA10/CA50/CA90 MFB
-  extraction, MAPO and Eng (2002) acoustic Ringing Intensity, ISO 2533 Standard
-  Atmosphere scaling, Hiroyasu-Arai (1990) and Naber-Siebers (1996) high-altitude spray penetration and wall-impingement risk assessment,
-  Wolfer (1938), Assanis (2003), and Hardenberg-Hase (1979) auto-ignition delay,
-  dynamic Livengood-Wu (1955) auto-ignition integral with Hermite sub-grid root solving,
-  two-stage LTHR/HTHR cool-flame detection, altitude-dependent dead state Second-Law
-  thermomechanical exergy, Kotas (1995) chemical exergy, Gouy-Stodola irreversibility,
-  closed-cycle exergy budgets, ASME V&V 20-2009 / Celik et al. (2008) three-grid Grid
-  Convergence Index (GCI) with AMR oscillatory convergence protection, and 300-DPI SAE/IEEE
-  publication plotting.
+  Combusta is a Python library for the analysis of internal combustion engine
+  cycles from CFD and test-bench data. It provides a source-independent engine
+  case model, single-zone heat-release analysis with temperature- and
+  composition-dependent gas properties for any CxHyOz fuel including hydrogen,
+  cycle metrics (IMEP, indicated efficiency, specific fuel consumption, burn
+  fractions), side-by-side comparison of engine configurations with a
+  significance test against numerical uncertainty, exhaust-emission
+  post-processing, Grid Convergence Index estimation (Celik et al., 2008), and
+  validation comparisons following ASME V&V 20-2009. Application modules cover
+  diesel auto-ignition, spray tip penetration, standard-atmosphere altitude
+  scaling, and Second-Law exergy analysis.
 authors:
   - family-names: "Öztel"
     given-names: "Alperen"
@@ -28,21 +23,16 @@ license: MIT
 version: "0.2.0"
 date-released: "2026-11-08"
 keywords:
-  - computational-fluid-dynamics
   - internal-combustion-engines
-  - ansys-forte
-  - thermodynamics
-  - heat-release-rate
-  - aero-diesel
-  - fuel-spray-penetration
-  - auto-ignition-kinetics
-  - livengood-wu
-  - second-law-analysis
-  - exergy-budget
-  - engine-combustion-network
+  - heat-release-analysis
+  - hydrogen-engines
+  - computational-fluid-dynamics
   - verification-and-validation
   - asme-vv20
   - grid-convergence-index
+  - exhaust-emissions
+  - thermodynamics
+  - exergy
 references:
   - type: book
     title: "Internal Combustion Engine Fundamentals"
@@ -54,57 +44,70 @@ references:
       name: "McGraw-Hill Education"
     year: 2018
   - type: conference-paper
-    title: "A Universally Applicable Equation for the Instantaneous Heat Transfer Coefficient in the Internal Combustion Engine"
+    title: "Heat Release Analysis of Engine Pressure Data"
     authors:
-      - family-names: "Woschni"
-        given-names: "Gerhard"
-    collection-title: "SAE Technical Paper 670931"
-    year: 1967
-    doi: "10.4271/670931"
-  - type: conference-paper
-    title: "Advanced Approaches for Heat Transfer Calculations"
-    authors:
-      - family-names: "Hohenberg"
-        given-names: "Günter F."
-    collection-title: "SAE Technical Paper 790825"
-    year: 1979
-    doi: "10.4271/790825"
-  - type: conference-paper
-    title: "Characterization of Pressure Waves in HCCI Combustion"
-    authors:
-      - family-names: "Eng"
+      - family-names: "Gatowski"
         given-names: "J. A."
-    collection-title: "SAE Technical Paper 2002-01-2859"
+      - family-names: "Balles"
+        given-names: "E. N."
+      - family-names: "Chun"
+        given-names: "K. M."
+      - family-names: "Nelson"
+        given-names: "F. E."
+      - family-names: "Ekchian"
+        given-names: "J. A."
+      - family-names: "Heywood"
+        given-names: "J. B."
+    collection-title: "SAE Technical Paper 841359"
+    doi: "10.4271/841359"
+    year: 1984
+  - type: article
+    title: "Procedure for Estimation and Reporting of Uncertainty Due to Discretization in CFD Applications"
+    authors:
+      - family-names: "Celik"
+        given-names: "Ismail B."
+      - family-names: "Ghia"
+        given-names: "Urmila"
+      - family-names: "Roache"
+        given-names: "Patrick J."
+      - family-names: "Freitas"
+        given-names: "Christopher J."
+      - family-names: "Coleman"
+        given-names: "Hugh"
+      - family-names: "Raad"
+        given-names: "Peter E."
+    journal: "Journal of Fluids Engineering"
+    volume: 130
+    issue: "7"
+    start: "078001"
+    doi: "10.1115/1.2960953"
+    year: 2008
+  - type: standard
+    title: "V&V 20-2009: Standard for Verification and Validation in Computational Fluid Dynamics and Heat Transfer"
+    authors:
+      - name: "American Society of Mechanical Engineers"
+    year: 2009
+  - type: book
+    title: "Verification and Validation in Computational Science and Engineering"
+    authors:
+      - family-names: "Roache"
+        given-names: "Patrick J."
+    publisher:
+      name: "Hermosa Publishers"
+    year: 1998
+  - type: report
+    title: "NASA Glenn Coefficients for Calculating Thermodynamic Properties of Individual Species"
+    authors:
+      - family-names: "McBride"
+        given-names: "Bonnie J."
+      - family-names: "Zehe"
+        given-names: "Michael J."
+      - family-names: "Gordon"
+        given-names: "Sanford"
+    institution:
+      name: "NASA Glenn Research Center"
+    number: "NASA/TP-2002-211556"
     year: 2002
-    doi: "10.4271/2002-01-2859"
-  - type: conference-paper
-    title: "Structures of Fuel Sprays in Diesel Engines"
-    authors:
-      - family-names: "Hiroyasu"
-        given-names: "Hiroyuki"
-      - family-names: "Arai"
-        given-names: "Masataka"
-    collection-title: "SAE Technical Paper 900475"
-    year: 1990
-    doi: "10.4271/900475"
-  - type: conference-paper
-    title: "Effects of Gas Density and Vaporization on Penetration and Dispersion of Diesel Sprays"
-    authors:
-      - family-names: "Naber"
-        given-names: "Jeffrey D."
-      - family-names: "Siebers"
-        given-names: "Dennis L."
-    collection-title: "SAE Technical Paper 960034"
-    year: 1996
-    doi: "10.4271/960034"
-  - type: conference-paper
-    title: "Scaling Liquid-Phase Fuel Penetration in Diesel Sprays Based on Mixing-Limited Vaporization"
-    authors:
-      - family-names: "Siebers"
-        given-names: "Dennis L."
-    collection-title: "SAE Technical Paper 1999-01-0528"
-    year: 1999
-    doi: "10.4271/1999-01-0528"
   - type: conference-paper
     title: "Correlation of Autoignition Phenomena in Internal Combustion Engines and Rapid Compression Machines"
     authors:
@@ -112,56 +115,37 @@ references:
         given-names: "J. C."
       - family-names: "Wu"
         given-names: "P. C."
-    collection-title: "Symposium (International) on Combustion"
-    volume: "5"
-    issue: "1"
-    pages: "347-356"
-    year: 1955
+    collection-title: "Fifth Symposium (International) on Combustion"
     doi: "10.1016/S0082-0784(55)80047-1"
+    year: 1955
   - type: conference-paper
-    title: "An Empirical Formula for Computing the Ignition Delay in Diesel Engines Under Arbitrary Conditions"
+    title: "An Empirical Formula for Computing the Pressure Rise Delay of a Fuel from Its Cetane Number and from the Relevant Parameters of Direct-Injection Diesel Engines"
     authors:
       - family-names: "Hardenberg"
-        given-names: "Horst O."
+        given-names: "H. O."
       - family-names: "Hase"
-        given-names: "Frank W."
+        given-names: "F. W."
     collection-title: "SAE Technical Paper 790493"
-    year: 1979
     doi: "10.4271/790493"
+    year: 1979
   - type: article
-    title: "A Comprehensive Survey of Ignition Delay in Diesel Engines"
-    authors:
-      - family-names: "Assanis"
-        given-names: "Dennis N."
-      - family-names: "Filipi"
-        given-names: "Zoran S."
-      - family-names: "Fiveland"
-        given-names: "Scott B."
-      - family-names: "Syrimis"
-        given-names: "Michael"
-    journal: "ASME Journal of Engineering for Gas Turbines and Power"
-    volume: "125"
-    issue: "2"
-    pages: "450-457"
-    year: 2003
-    doi: "10.1115/1.1563238"
-  - type: book
-    title: "The Exergy Method of Thermal Plant Analysis"
-    edition: "Reprint"
-    authors:
-      - family-names: "Kotas"
-        given-names: "Tadeusz J."
-    publisher:
-      name: "Krieger Publishing Company"
-    year: 1995
-  - type: book
-    title: "Second-Law Analysis of Internal Combustion Engines"
+    title: "Second-law analyses applied to internal combustion engines operation"
     authors:
       - family-names: "Rakopoulos"
-        given-names: "Constantine D."
+        given-names: "C. D."
       - family-names: "Giakoumis"
-        given-names: "Evangelos G."
-    publisher:
-      name: "Springer"
+        given-names: "E. G."
+    journal: "Progress in Energy and Combustion Science"
+    volume: 32
+    issue: "1"
+    start: "2"
+    end: "47"
     year: 2006
-    doi: "10.1007/978-1-84628-661-2"
+  - type: book
+    title: "The Exergy Method of Thermal Plant Analysis"
+    authors:
+      - family-names: "Kotas"
+        given-names: "T. J."
+    publisher:
+      name: "Krieger Publishing"
+    year: 1995

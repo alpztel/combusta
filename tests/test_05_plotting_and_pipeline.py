@@ -195,6 +195,6 @@ class TestStrictAuditPlottingAndPipeline:
             assert magic_ok, f"Invalid PNG header in {fname}"
             assert size_kb > 30.0, f"Expected > 30 KB for 300-DPI figure {fname}, got {size_kb:.1f} KB"
 
-    def test_audit_plotting_vectorization_and_typing(self) -> None:
+    def test_audit_plotting_type_check(self) -> None:
         """AUDIT: pyrefly static type check of the plotting/ package."""
         assert_package_type_checks("plotting")
