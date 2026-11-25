@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "combusta"
 version = "0.4.0"
-description = "Combusta: fuel-agnostic internal combustion engine cycle analysis, case comparison, and verification & validation (ASME V&V 20) toolkit for CFD and test-bench data."
+description = "Fuel-agnostic engine cycle analysis for CFD and test-bench data: heat release, case comparison at matched CA50 or MBT, two-volume pre-chamber analysis, emissions, and ASME V&V 20 uncertainty and validation."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
