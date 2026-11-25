@@ -29,6 +29,12 @@ from numpy.typing import NDArray
 from scipy.integrate import trapezoid
 
 from combusta.case import EngineCase
+from combusta.emissions import (
+    combustion_efficiency,
+    emission_index,
+    has_heating_value,
+    specific_emission,
+)
 from combusta.exceptions import PhysicalBoundsError
 from combusta.signal.filtering import compute_derivative
 from combusta.thermo.fuels import make_product_mixture, make_reactant_mixture
@@ -72,7 +78,11 @@ METRIC_SPECS: Final[Mapping[str, MetricSpec]] = {
     "q_gross": MetricSpec("Cumulative gross heat release", "J", 1.0),
     "heat_release_fraction": MetricSpec("Gross heat release / fuel energy", "%", 100.0),
     "wall_heat_loss": MetricSpec("Cumulative wall heat loss", "J", 1.0),
+    "combustion_efficiency": MetricSpec("Combustion efficiency (exhaust chemical energy)", "%", 100.0),
 }
+
+SPECIFIC_EMISSION_PREFIX: Final[str] = "is_"
+EMISSION_INDEX_PREFIX: Final[str] = "ei_"
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,11 +257,41 @@ def compute_cycle_metrics(
             values["isfc_gross"] = op.fuel_mass_per_cycle_kg / imep.indicated_work_gross_j
     if case.trace.wall_heat_loss_j_per_deg is not None:
         values["wall_heat_loss"] = float(trapezoid(case.trace.wall_heat_loss_j_per_deg, theta))
+    values.update(_emission_metrics(case, imep.indicated_work_gross_j))
     values.update(case.scalars)
 
     return CycleMetrics(
         case_name=case.name, values=values, heat_release=hrr, burn=burn, notes=tuple(notes)
     )
+
+
+def _emission_metrics(case: EngineCase, work_gross_j: float) -> dict[str, float]:
+    """Gross indicated specific emissions, emission indices, and combustion efficiency."""
+    emissions = case.emissions_kg_per_cycle
+    m_fuel = case.operating_point.fuel_mass_per_cycle_kg
+    out: dict[str, float] = {}
+    for species, mass in emissions.items():
+        out[f"{SPECIFIC_EMISSION_PREFIX}{species}"] = (
+            specific_emission(mass, work_gross_j) if work_gross_j > 0.0 else float("nan")
+        )
+        out[f"{EMISSION_INDEX_PREFIX}{species}"] = (
+            emission_index(mass, m_fuel) if m_fuel is not None else float("nan")
+        )
+    if m_fuel is not None and any(has_heating_value(sp) for sp in emissions):
+        out["combustion_efficiency"] = combustion_efficiency(
+            case.operating_point.fuel, m_fuel, emissions
+        )
+    return out
+
+
+def _dynamic_spec(key: str) -> MetricSpec | None:
+    if key.startswith(SPECIFIC_EMISSION_PREFIX):
+        species = key.removeprefix(SPECIFIC_EMISSION_PREFIX)
+        return MetricSpec(f"Gross indicated specific {species}", "g/kWh", 1.0e3 * J_PER_KWH)
+    if key.startswith(EMISSION_INDEX_PREFIX):
+        species = key.removeprefix(EMISSION_INDEX_PREFIX)
+        return MetricSpec(f"Emission index {species}", "g/kg fuel", 1.0e3)
+    return None
 
 
 def _combustion_detected(
@@ -469,7 +509,7 @@ def compare_cases(
         vals = tuple(float(m.values.get(key, float("nan"))) for m in metrics)
         if not any(math.isfinite(v) for v in vals):
             continue
-        spec = METRIC_SPECS.get(key)
+        spec = METRIC_SPECS.get(key) or _dynamic_spec(key)
         if spec is None:
             unit, factor = units.get(key, ("", 1.0))
             spec = MetricSpec(key, unit, factor)

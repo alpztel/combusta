@@ -22,6 +22,16 @@ from combusta.constants import (
     ISAConditions,
     compute_isa_conditions,
 )
+from combusta.emissions import (
+    SPECIES_MOLAR_MASS,
+    UNBURNED_SPECIES_LHV,
+    ExhaustComposition,
+    combustion_efficiency,
+    emission_index,
+    exhaust_composition,
+    species_mass_from_mole_fraction,
+    specific_emission,
+)
 from combusta.exceptions import (
     CombustaError,
     ForteParseError,
@@ -144,6 +154,14 @@ from combusta.thermo import (
     verify_tdc_phasing,
 )
 from combusta.vv import (
+    DEFAULT_GCI_COVERAGE_FACTOR,
+    DEFAULT_VALIDATION_COVERAGE_FACTOR,
+    ValidationResult,
+    experimental_uncertainty,
+    input_uncertainty,
+    numerical_uncertainty_from_gci,
+    sensitivity_coefficient,
+    validate,
     ASME_MIN_REFINEMENT_RATIO,
     DEFAULT_THREE_GRID_FS,
     ConvergenceRegime,
@@ -156,6 +174,22 @@ from combusta.vv import (
 __version__ = "0.2.0"
 
 __all__ = [
+    "SPECIES_MOLAR_MASS",
+    "UNBURNED_SPECIES_LHV",
+    "ExhaustComposition",
+    "combustion_efficiency",
+    "emission_index",
+    "exhaust_composition",
+    "species_mass_from_mole_fraction",
+    "specific_emission",
+    "DEFAULT_GCI_COVERAGE_FACTOR",
+    "DEFAULT_VALIDATION_COVERAGE_FACTOR",
+    "ValidationResult",
+    "experimental_uncertainty",
+    "input_uncertainty",
+    "numerical_uncertainty_from_gci",
+    "sensitivity_coefficient",
+    "validate",
     "METRIC_SPECS",
     "CaseComparison",
     "ComparisonRow",
