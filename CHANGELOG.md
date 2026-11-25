@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Project renamed from `ice-cfd-validation-assistant` / `ice_cfd_validator` to **Combusta** (`combusta`), reflecting the move to a fuel-agnostic engine analysis, case comparison, and V&V toolkit. The GitHub repository URL is unchanged until the repository itself is renamed.
+- Project renamed from `ice-cfd-validation-assistant` / `ice_cfd_validator` to **Combusta** (`combusta`), reflecting the move to a fuel-agnostic engine analysis, case comparison, and V&V toolkit. The GitHub repository is now `alpztel/combusta`; old URLs redirect.
 - Base exception renamed to `CombustaError`; `ValidationAssistantError` remains as an alias.
 - Removed the AST "no explicit loops" test audits; the pyrefly type check is kept.
 
@@ -74,5 +74,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 39 automated unit, analytical roundtrip, AST vectorization, memory-leak, and `pyrefly` static-typing audit tests under `tests/`.
   - Multi-version Ubuntu GitHub Actions workflow (`.github/workflows/ci_validation.yml`) for Python 3.11, 3.12, and 3.13.
 
-[0.2.0]: https://github.com/alpztel/ice-cfd-validation-assistant/releases/tag/v0.2.0
-[0.1.0]: https://github.com/alpztel/ice-cfd-validation-assistant/releases/tag/v0.1.0
+[0.2.0]: https://github.com/alpztel/combusta/releases/tag/v0.2.0
+[0.1.0]: https://github.com/alpztel/combusta/releases/tag/v0.1.0

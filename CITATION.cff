@@ -23,8 +23,8 @@ abstract: >-
 authors:
   - family-names: "Öztel"
     given-names: "Alperen"
-repository-code: "https://github.com/alpztel/ice-cfd-validation-assistant"
-url: "https://github.com/alpztel/ice-cfd-validation-assistant"
+repository-code: "https://github.com/alpztel/combusta"
+url: "https://github.com/alpztel/combusta"
 license: MIT
 version: "0.2.0"
 date-released: "2026-11-08"

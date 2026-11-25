@@ -1,16 +1,33 @@
-# `combusta`
+# Combusta
 
-[![Physics & ASME V&V Validation Suite](https://github.com/alpztel/ice-cfd-validation-assistant/actions/workflows/ci_validation.yml/badge.svg)](https://github.com/alpztel/ice-cfd-validation-assistant/actions/workflows/ci_validation.yml)
+[![CI](https://github.com/alpztel/combusta/actions/workflows/ci_validation.yml/badge.svg)](https://github.com/alpztel/combusta/actions/workflows/ci_validation.yml)
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-004488.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-117733.svg)](LICENSE)
-[![Standard: ASME V&V 20-2009](https://img.shields.io/badge/standard-ASME%20V%26V%2020--2009-BB5566.svg)](#5-asme-vv-20-2009--celik-et-al-2008-grid-convergence-index-gci)
-[![Atmosphere: ISO 2533:1975](https://img.shields.io/badge/atmosphere-ISO%202533%3A1975-228833.svg)](#4-iso-2533-standard-atmosphere--high-altitude-spray-scaling)
-[![Kinetics: Livengood--Wu](https://img.shields.io/badge/kinetics-Livengood--Wu%201955-EE7733.svg)](#6-auto-ignition-kinetics--dynamic-livengood-wu-integral-wolfer-1938-livengood--wu-1955-hardenberg--hase-1979-assanis-et-al-2003)
-[![Exergy: Second Law](https://img.shields.io/badge/thermodynamics-2nd%20Law%20Exergy-882255.svg)](#7-second-law-thermodynamics-dead-state--exergy-destruction-kotas-1995-caton-2000-rakopoulos--giakoumis-2006)
 [![Typed: PEP 561 | pyrefly](https://img.shields.io/badge/typing-PEP%20561%20%7C%20pyrefly-DDAA33.svg)](src/combusta/py.typed)
 [![Citation: CFF 1.2.0](https://img.shields.io/badge/cite-CITATION.cff-44AA99.svg)](CITATION.cff)
 
-**Open-source, strictly SI-normalized Python 3.11+ engineering toolkit for 0D/1D internal combustion engine (ICE) thermodynamic cycle diagnostics, Second-Law exergy budgets, high-altitude Aero-Diesel fuel-spray scaling, auto-ignition kinetics, and ASME V&V 20-2009 3D CFD mesh-independence verification — purpose-built for [ANSYS Forte](https://www.ansys.com/products/fluids/ansys-forte) (`thermo.csv`, `spray.csv`, `dynamic.csv`) and [Sandia Engine Combustion Network (ECN)](https://ecn.sandia.gov/) datasets.**
+**Combusta** is a fuel-agnostic Python toolkit for internal combustion engine cycle analysis, side-by-side comparison of engine cases, and verification & validation of CFD and test-bench data. It works with any C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> fuel, including hydrogen, and keeps every quantity in SI units.
+
+> [!NOTE]
+> The project was renamed from `ice-cfd-validation-assistant` (`ice_cfd_validator`) to **Combusta** (`combusta`). The sections below the quick start still document the 0.2.0 modules and are being revised.
+
+### Quick start: compare two engine cases
+
+```python
+from combusta import EngineCase, HYDROGEN, OperatingPoint, SliderCrankGeometry, compare_cases, parse_thermo_csv
+
+geometry = SliderCrankGeometry(bore_m=0.086, stroke_m=0.086, conrod_m=0.145, compression_ratio=12.0)
+op = OperatingPoint(rpm=2000.0, fuel=HYDROGEN, lambda_air=2.0, fuel_mass_per_cycle_kg=1.1e-5)
+
+open_chamber = EngineCase.from_forte_thermo("open chamber", parse_thermo_csv("open/thermo.csv"), geometry=geometry, operating_point=op)
+pre_chamber = EngineCase.from_forte_thermo("pre-chamber", parse_thermo_csv("prechamber/thermo.csv"), geometry=geometry, operating_point=op)
+
+print(open_chamber.volume_consistency_error())   # sanity check of geometry vs. exported volume
+comparison = compare_cases([open_chamber, pre_chamber])
+print(comparison.to_markdown())                   # Pmax, IMEP, efficiency, ISFC, CA10/50/90, ...
+```
+
+Heat release uses mass-fraction-burned-weighted unburned/burned gas properties when `lambda_air` is known. Pass per-case numerical uncertainties (for example `uncertainty_from_gci(...)` from a three-grid study) to `compare_cases` to see which differences exceed the numerical uncertainty.
 
 [Overview](#exhaustive-capability-overview) • [Architecture](#package-architecture--strict-si-unit-engine) • [Theory](#mathematical--physical-formulations) • [Visual Showcase](#aero-diesel-high-altitude-showcase-0-ft--15000-ft--30000-ft) • [Complete API](#complete-public-api-reference) • [Code Recipes](#installation-quickstart--engineering-recipes) • [Verification Audit](#independent-verification--strict-physical-audit-65-tests) • [Structure](#repository-structure) • [Citation](#how-to-cite) • [References](#references) • [License](#license)
 
@@ -465,7 +482,7 @@ Every symbol below is re-exported directly from the top-level `combusta` namespa
 ### Installation
 
 ```bash
-git clone https://github.com/alpztel/ice-cfd-validation-assistant.git
+git clone https://github.com/alpztel/combusta.git
 cd combusta
 
 # Recommended: create a virtual environment and install with dev/typing tools
@@ -705,7 +722,7 @@ Every physics module is verified against closed-form analytical identities, IEEE
 ## Repository Structure
 
 ```text
-ice-cfd-validation-assistant/
+combusta/
 ├── .github/
 │   └── workflows/
 │       └── ci_validation.yml          # Ubuntu CI (Python 3.11 / 3.12 / 3.13): pyrefly + pytest + demo
@@ -789,7 +806,7 @@ If you use **`combusta`** in academic papers, theses, or CFD verification report
   title        = {{combusta}: Open-Source 0D/1D ICE Thermodynamic Diagnostics, High-Altitude Aero-Diesel Spray Physics, Auto-Ignition Kinetics, Second-Law Exergy Budgets, and ASME V\&V 20-2009 3D CFD Validation Toolkit},
   version      = {0.2.0},
   year         = {2026},
-  url          = {https://github.com/alpztel/ice-cfd-validation-assistant},
+  url          = {https://github.com/alpztel/combusta},
   license      = {MIT}
 }
 ```

@@ -12,7 +12,7 @@
 If you discover a security issue (for example, unsafe file parsing, integer/floating-point division traps, or denial of service via malformed input CSV files) in `combusta`:
 
 1. **Do not** open a public issue containing exploit payloads or crash files.
-2. Report the vulnerability privately via [GitHub Security Advisories](https://github.com/alpztel/ice-cfd-validation-assistant/security/advisories/new) with a minimal, synthetic reproduction snippet.
+2. Report the vulnerability privately via [GitHub Security Advisories](https://github.com/alpztel/combusta/security/advisories/new) with a minimal, synthetic reproduction snippet.
 3. You may expect an initial response within 48 hours and a patched release within 7 days.
 
 ## Numerical Safety & Boundary Sanitization

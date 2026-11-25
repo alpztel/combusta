@@ -65,11 +65,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/alpztel/ice-cfd-validation-assistant"
-Repository = "https://github.com/alpztel/ice-cfd-validation-assistant.git"
-Documentation = "https://github.com/alpztel/ice-cfd-validation-assistant#readme"
-Issues = "https://github.com/alpztel/ice-cfd-validation-assistant/issues"
-Changelog = "https://github.com/alpztel/ice-cfd-validation-assistant/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/alpztel/combusta"
+Repository = "https://github.com/alpztel/combusta.git"
+Documentation = "https://github.com/alpztel/combusta#readme"
+Issues = "https://github.com/alpztel/combusta/issues"
+Changelog = "https://github.com/alpztel/combusta/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

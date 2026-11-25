@@ -29,7 +29,7 @@ Thank you for contributing to **`combusta`**. Because this toolkit is used for q
 ## 2. Local Development Setup
 
 ```bash
-git clone https://github.com/alpztel/ice-cfd-validation-assistant.git
+git clone https://github.com/alpztel/combusta.git
 cd combusta
 
 python -m venv .venv
