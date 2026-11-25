@@ -290,3 +290,12 @@ class TestReportAndCli:
     def test_cli_reports_errors_without_traceback(self, tmp_path: Path, capsys) -> None:
         assert main(["compare", str(tmp_path / "x"), str(tmp_path / "y")]) == 1
         assert "Case file not found" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_case_directory_uses_lf_line_endings(cycles, tmp_path: Path) -> None:
+    """Written files are byte-identical on every platform (stable SHA-256 provenance)."""
+    slow, _ = cycles
+    path = write_case_directory(slow.case, tmp_path / "lf", fuel_key="hydrogen")
+    for name in ("case.toml", "thermo.csv"):
+        assert b"\r" not in (path.parent / name).read_bytes()

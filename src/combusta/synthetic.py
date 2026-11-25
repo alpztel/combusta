@@ -31,8 +31,9 @@ from scipy.integrate import solve_ivp
 from combusta.case import CycleTrace, EngineCase, OperatingPoint
 from combusta.exceptions import PhysicalBoundsError
 from combusta.prechamber import PreChamberGeometry, transfer_rate
-from combusta.thermo.fuels import Fuel, blend_burned_unburned, make_product_mixture, make_reactant_mixture
+from combusta.thermo.fuels import Fuel, make_product_mixture, make_reactant_mixture
 from combusta.thermo.kinematics import SliderCrankGeometry
+from combusta.thermo.nasa_polynomials import NASAGasMixture
 
 FloatArray = NDArray[np.float64]
 
@@ -153,13 +154,18 @@ def manufactured_cycle(
         return w_scale * math.exp(-0.5 * ((th - w_mu) / w_sigma) ** 2)
 
     r_u, r_b = unburned.specific_gas_constant, burned.specific_gas_constant
+    # Plain-float evaluation of the same blend as blend_burned_unburned (cp and R mixed
+    # linearly in x_b); see the note in manufactured_pre_chamber_cycle.
+    gas_u, gas_b = _ScalarNasa(unburned), _ScalarNasa(burned)
+    crank = _ScalarSliderCrank(geometry)
 
     def rhs(th: float, y: FloatArray) -> list[float]:
-        k = geometry.evaluate(np.array([th]))
-        v, dv = float(k.volume_m3[0]), float(k.dv_dtheta_m3_per_deg[0])
+        v, dv = crank(th)
         xb = x_b(th)
-        t = float(y[0]) * v / (mass * ((1.0 - xb) * r_u + xb * r_b))
-        g = float(blend_burned_unburned(np.array([t]), np.array([xb]), unburned, burned).gamma[0])
+        r_mix = (1.0 - xb) * r_u + xb * r_b
+        t = float(y[0]) * v / (mass * r_mix)
+        cp = (1.0 - xb) * gas_u.cp(t) + xb * gas_b.cp(t)
+        g = cp / (cp - r_mix)
         return [((g - 1.0) * (dq_g(th) - dq_w(th)) - g * float(y[0]) * dv) / v]
 
     sol = solve_ivp(
@@ -275,7 +281,7 @@ def write_case_directory(
         raise ValueError(f"Unknown trace_format {trace_format!r}.")
     matrix = np.column_stack(data)
     lines += [",".join(f"{v:.12g}" for v in row) for row in matrix]
-    (out / trace_name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (out / trace_name).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
     geo, op = case.geometry, case.operating_point
     toml = [
@@ -310,7 +316,7 @@ def write_case_directory(
     if case.metadata:
         toml += ["", "[metadata]"] + [f"{_toml_value(k)} = {_toml_value(v)}" for k, v in case.metadata.items()]
     path = out / "case.toml"
-    path.write_text("\n".join(toml) + "\n", encoding="utf-8")
+    path.write_text("\n".join(toml) + "\n", encoding="utf-8", newline="\n")
     return path
 
 
@@ -339,6 +345,57 @@ class ManufacturedPreChamberCycle:
     q_mc_total_j: float
     trapped_mass_kg: float
     rpm: float
+
+
+class _ScalarNasa:
+    """Plain-float NASA 7-coefficient evaluation of one mixture (same formulas as NASAGasMixture)."""
+
+    def __init__(self, mixture: NASAGasMixture) -> None:
+        self.r = mixture.specific_gas_constant
+        self.lo = tuple(float(c) for c in mixture.low_coeffs)
+        self.hi = tuple(float(c) for c in mixture.high_coeffs)
+        self.t_mid = float(mixture.t_mid_k)
+
+    def _c(self, t: float) -> tuple[float, ...]:
+        if not 200.0 <= t <= 6000.0:
+            raise PhysicalBoundsError("Temperature outside NASA 7-term validity range [200 K, 6000 K].")
+        return self.lo if t < self.t_mid else self.hi
+
+    def cp(self, t: float) -> float:
+        c = self._c(t)
+        return self.r * (c[0] + t * (c[1] + t * (c[2] + t * (c[3] + t * c[4]))))
+
+    def cv(self, t: float) -> float:
+        return self.cp(t) - self.r
+
+    def gamma(self, t: float) -> float:
+        cp = self.cp(t)
+        return cp / (cp - self.r)
+
+    def enthalpy(self, t: float) -> float:
+        c = self._c(t)
+        return self.r * (t * (c[0] + t * (0.5 * c[1] + t * (c[2] / 3.0 + t * (0.25 * c[3] + 0.2 * c[4] * t)))) + c[5])
+
+
+class _ScalarSliderCrank:
+    """Plain-float offset slider-crank volume and dV/dtheta (same formulas as SliderCrankGeometry.evaluate)."""
+
+    def __init__(self, geometry: SliderCrankGeometry) -> None:
+        self.a = 0.5 * geometry.stroke_m
+        self.l_rod = geometry.conrod_m
+        self.e = geometry.pin_offset_m
+        self.a_p = geometry.piston_area_m2
+        self.v_c = geometry.clearance_volume_m3
+        self.y_max = math.sqrt((self.l_rod + self.a) ** 2 - self.e**2)
+
+    def __call__(self, theta_deg: float) -> tuple[float, float]:
+        th = math.radians(theta_deg)
+        sin_t, cos_t = math.sin(th), math.cos(th)
+        lateral = self.a * sin_t - self.e
+        rod = math.sqrt(self.l_rod**2 - lateral**2)
+        s = self.y_max - self.a * cos_t - rod
+        ds = self.a * sin_t + self.a * cos_t * lateral / rod
+        return self.v_c + self.a_p * s, self.a_p * ds * (math.pi / 180.0)
 
 
 def manufactured_pre_chamber_cycle(
@@ -393,18 +450,32 @@ def manufactured_pre_chamber_cycle(
             return 0.0
         return total * a * 3.0 / dur * u**2 * math.exp(-a * u**3) / norm
 
+    # The right-hand side is evaluated tens of thousands of times by the stiff integrator,
+    # so it uses plain-float arithmetic: the NASA polynomials and the slider-crank volume
+    # are evaluated directly instead of through the array-based APIs. The expressions are
+    # the same as in combusta.thermo and combusta.prechamber; the inverse analysis uses
+    # those vectorized implementations, so the test also cross-checks the two.
+    gas = _ScalarNasa(mix)
+    crank = _ScalarSliderCrank(geometry)
+    area_cd = pre_chamber.discharge_coefficient * pre_chamber.flow_area_m2
+
     def rhs(th: float, y: FloatArray) -> list[float]:
         p_pc, p_mc, m_pc = float(y[0]), float(y[1]), float(y[2])
-        k = geometry.evaluate(np.array([th]))
-        v_mc, dv = float(k.volume_m3[0]), float(k.dv_dtheta_m3_per_deg[0])
-        m_mc = m_total - m_pc
-        t_pc, t_mc = p_pc * v_pc / (m_pc * r), p_mc * v_mc / (m_mc * r)
-        x = float(transfer_rate(p_pc, t_pc, p_mc, t_mc, mixture_pc=mix, mixture_mc=mix,
-                                geometry=pre_chamber, rpm=rpm))
-        h_flow = float(mix.enthalpy(t_pc if x >= 0.0 else t_mc))
-        g_pc, g_mc = float(mix.gamma(t_pc)), float(mix.gamma(t_mc))
-        b_pc = float(mix.internal_energy(t_pc) - mix.cv(t_pc) * t_pc) - h_flow
-        b_mc = float(mix.internal_energy(t_mc) - mix.cv(t_mc) * t_mc) - h_flow
+        v_mc, dv = crank(th)
+        t_pc = p_pc * v_pc / (m_pc * r)
+        t_mc = p_mc * v_mc / ((m_total - m_pc) * r)
+        if p_pc >= p_mc:
+            p_up, p_dn, t_up, sign = p_pc, p_mc, t_pc, 1.0
+        else:
+            p_up, p_dn, t_up, sign = p_mc, p_pc, t_mc, -1.0
+        g_up = gas.gamma(t_up)
+        ratio = max(p_dn / p_up, (2.0 / (g_up + 1.0)) ** (g_up / (g_up - 1.0)))
+        flow = ratio ** (1.0 / g_up) * math.sqrt(max(2.0 * g_up / (g_up - 1.0) * (1.0 - ratio ** ((g_up - 1.0) / g_up)), 0.0))
+        x = sign * area_cd * p_up / math.sqrt(r * t_up) * flow / (6.0 * rpm)
+        h_flow = gas.enthalpy(t_pc if x >= 0.0 else t_mc)
+        g_pc, g_mc = gas.gamma(t_pc), gas.gamma(t_mc)
+        b_pc = gas.enthalpy(t_pc) - r * t_pc - gas.cv(t_pc) * t_pc - h_flow
+        b_mc = gas.enthalpy(t_mc) - r * t_mc - gas.cv(t_mc) * t_mc - h_flow
         dq_pc = wiebe_rate(th, pc_start_deg, pc_duration_deg, q_pc)
         dq_mc = wiebe_rate(th, mc_start_deg, mc_duration_deg, q_mc)
         dp_pc = (g_pc - 1.0) / v_pc * (dq_pc - b_pc * (-x))

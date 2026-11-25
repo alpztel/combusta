@@ -1,10 +1,16 @@
 name: Physics & ASME V&V Validation Suite
 
 on:
+  # Pull requests are tested by the pull_request event; pushes are tested on main only,
+  # so a pushed pull-request branch does not run the suite twice.
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -41,8 +47,7 @@ jobs:
           PURELIB=$(python -c "import sysconfig; print(sysconfig.get_path('purelib'))")
           pyrefly check --site-package-path "$PURELIB"
 
+      # The test suite also runs examples/altitude_sweep_demo.py end to end
+      # (test_05_plotting_and_pipeline); --durations lists the slowest tests in the log.
       - name: Execute analytical thermodynamics, spray scaling & ASME GCI test suite
-        run: pytest -v
-
-      - name: Smoke-test end-to-end Aero-Diesel altitude sweep & 300-DPI figure export
-        run: python examples/altitude_sweep_demo.py
+        run: pytest -v --durations=15

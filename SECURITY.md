@@ -6,7 +6,8 @@ Combusta is maintained by a single developer. Security fixes are made only on th
 
 | Version | Supported |
 | :--- | :---: |
-| 0.3.x | Yes |
+| 0.4.x | Yes |
+| 0.3.x | No |
 | < 0.3 (released as `ice-cfd-validation-assistant`) | No |
 
 ## Reporting a vulnerability

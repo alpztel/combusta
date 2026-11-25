@@ -11,7 +11,11 @@ abstract: >-
   fractions), side-by-side comparison of engine configurations with a
   significance test against numerical uncertainty, exhaust-emission
   post-processing, Grid Convergence Index estimation (Celik et al., 2008), and
-  validation comparisons following ASME V&V 20-2009. Application modules cover
+  validation comparisons following ASME V&V 20-2009. It compares engine
+  configurations at matched combustion phasing or at MBT timing, analyzes
+  pre-chamber engines as two volumes connected by orifices, and propagates
+  pressure-measurement errors into the cycle metrics. Cases are defined in
+  TOML files and compared from the command line. Application modules cover
   diesel auto-ignition, spray tip penetration, standard-atmosphere altitude
   scaling, and Second-Law exergy analysis.
 authors:
@@ -20,12 +24,14 @@ authors:
 repository-code: "https://github.com/alpztel/combusta"
 url: "https://github.com/alpztel/combusta"
 license: MIT
-version: "0.3.0"
-date-released: "2026-11-25"
+version: "0.4.0"
+date-released: "2026-11-26"
 keywords:
   - internal-combustion-engines
   - heat-release-analysis
   - hydrogen-engines
+  - pre-chamber-engines
+  - uncertainty-quantification
   - computational-fluid-dynamics
   - verification-and-validation
   - asme-vv20
@@ -149,3 +155,15 @@ references:
     publisher:
       name: "Krieger Publishing"
     year: 1995
+  - type: conference-paper
+    title: "A Review of Pre-Chamber Initiated Jet Ignition Combustion Systems"
+    authors:
+      - family-names: "Toulson"
+        given-names: "E."
+      - family-names: "Schock"
+        given-names: "H."
+      - family-names: "Attard"
+        given-names: "W."
+    collection-title: "SAE Technical Paper 2010-01-2263"
+    doi: "10.4271/2010-01-2263"
+    year: 2010

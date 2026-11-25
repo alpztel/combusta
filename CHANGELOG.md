@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
+From exported data to a comparison report, and the analyses needed to compare an open-chamber and a pre-chamber engine: case files and a command line, comparison at matched combustion phasing or MBT timing, a two-volume pre-chamber analysis, and the uncertainty of pressure-derived metrics from measurement errors. All new models are verified against closed-form results and manufactured solutions; the library has **still not been validated against engine or CFD measurements**.
+
 ### Added (measurement uncertainty)
 - `combusta.measurement`: `PressureMeasurementUncertainty` (TDC phasing, pegging offset, gain, noise), `perturb_pressure`, and `pressure_measurement_uncertainty` with a linear uncertainty budget (central differences, JCGM 100:2008) and a Monte Carlo propagation (JCGM 101:2008) reported with the standard error of its standard deviation. A traced temperature is replaced by the ideal-gas reconstruction when the trapped mass is known.
 - `[measurement]` table in case files, `combusta measurement` (with `--savgol` to reproduce the filtering of real data), `write_measurement_report`.
@@ -27,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/test_13_matched_comparison.py`.
 - Documentation: matched comparison in the README (Section 9, quick start, verification table), `configuration` and `combusta matched` in `docs/case-file.md`, sweep planning in `docs/forte-output-checklist.md`, and `examples/matched_sweep_demo.py`.
 
-### Added
+### Added (data intake and command line)
 - **Case files** (`combusta.casefile`): `load_case` builds an `EngineCase` from a `case.toml` (geometry, operating point, fuel by name or as a table, trace file and format, column map, wall heat-loss sign, scalars, emissions, uncertainties, metadata). Unknown keys are rejected. The trace file's SHA-256 is recorded. Format reference in `docs/case-file.md`.
 - **Column mapping** for all readers: `ColumnSpec(column, unit)` and a `columns=` argument on `parse_thermo_csv`, `parse_spray_csv`, and `parse_dynamic_csv`; `inspect_columns` lists headers, units, and matched fields. Error messages name the available columns. Repeated headers get a numeric suffix instead of overwriting each other.
 - `parse_trace_csv` (`combusta.io.trace_csv`): generic crank-angle table reader for test-bench and 1D-model data; only crank angle and pressure are required.
@@ -37,7 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `examples/make_example_cases.py` and two manufactured example cases in `examples/cases/`.
 - `tests/test_12_data_intake.py`.
 
+### Changed
+- Manufactured cycles (`manufactured_cycle`, `manufactured_pre_chamber_cycle`) evaluate their right-hand side with plain-float NASA polynomials and slider-crank kinematics instead of the array APIs; the same equations, about 10 and 35 times faster. The test suite uses the same helpers in its own forward models and runs pyrefly once per session instead of once per package; the local suite time drops from about 72 s to 41 s.
+- CI no longer runs the altitude demo as a separate step (the test suite already runs it) and prints the 15 slowest tests.
+- CI runs on pull requests and on pushes to `main` only (previously on every push as well, which ran the suite twice per pull request), cancels superseded pull-request runs, and can be started manually.
+
 ### Fixed
+- `write_case_directory` writes LF line endings on every platform, so the SHA-256 of a written trace no longer depends on the operating system (#17).
 - Without a temperature trace, `compute_cycle_metrics` reconstructed the temperature with the unburned gas constant. It now passes the trapped mass to `compute_heat_release(trapped_mass_kg=...)`, which evaluates $T = PV/(m R(x_b))$ inside the $x_b$ iteration. For hydrogen at λ = 2 the old behaviour overstated the gross heat release of a manufactured case by 0.4 %.
 
 ## [0.3.0] - 2026-11-25
@@ -138,7 +148,8 @@ First release under the name **Combusta**. Versions 0.1.0 and 0.2.0 were publish
   - 39 automated unit, analytical roundtrip, AST vectorization, memory-leak, and `pyrefly` static-typing audit tests under `tests/`.
   - Multi-version Ubuntu GitHub Actions workflow (`.github/workflows/ci_validation.yml`) for Python 3.11, 3.12, and 3.13.
 
-[Unreleased]: https://github.com/alpztel/combusta/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/alpztel/combusta/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/alpztel/combusta/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/alpztel/combusta/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alpztel/combusta/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alpztel/combusta/releases/tag/v0.1.0

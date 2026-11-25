@@ -10,7 +10,7 @@
 **Combusta** is a Python library for the analysis of internal combustion engine cycles from simulation and test-bench data. It reduces crank-angle-resolved pressure traces to standard cycle metrics, compares engine configurations side by side, post-processes exhaust emissions, and quantifies numerical and validation uncertainty following ASME V&V 20. Thermodynamic properties are fuel-agnostic: any C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> fuel, including hydrogen, is supported at any air-excess ratio, and every quantity is held in SI units.
 
 > [!IMPORTANT]
-> **Project status — 0.3.0 (alpha).** Every model is verified against closed-form solutions and published reference data (see [Verification](#verification)). The library has **not yet been validated against engine or CFD measurements**, and its readers have not yet been exercised on real ANSYS Forte output. Treat results as research-grade until such validation is available.
+> **Project status — 0.4.0 (alpha).** Every model is verified against closed-form solutions and published reference data (see [Verification](#verification)). The library has **not yet been validated against engine or CFD measurements**, and its readers have not yet been exercised on real ANSYS Forte output. Treat results as research-grade until such validation is available.
 
 <details>
 <summary><b>Türkçe özet</b></summary>
@@ -57,7 +57,7 @@ Combusta, içten yanmalı motor çevrimlerini simülasyon (ör. ANSYS Forte) ve 
 Combusta requires Python 3.11 or later. It is not published on PyPI. To use a tagged release, install it from GitHub:
 
 ```bash
-python -m pip install "combusta @ git+https://github.com/alpztel/combusta.git@v0.3.0"
+python -m pip install "combusta @ git+https://github.com/alpztel/combusta.git@v0.4.0"
 ```
 
 The wheel and source distribution of each version are also attached to its [GitHub release](https://github.com/alpztel/combusta/releases), with build provenance attestations that can be checked with `gh attestation verify <file> --repo alpztel/combusta`.
@@ -554,7 +554,7 @@ Verification checks that the equations are implemented correctly; it says nothin
 
 | `test_15_measurement_uncertainty` | Pegging offset leaves BDC-to-BDC IMEP unchanged and shifts peak pressure by the offset; gain scales IMEP and peak pressure exactly; TDC phasing shifts the angle of peak pressure by the error; IMEP sensitivity to phasing equals the integral of dP/dθ·dV/dθ; Monte Carlo standard deviation within 3 standard errors of linear propagation (M = 1000) | JCGM 100:2008, JCGM 101:2008 |
 
-At the time of writing, 221 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
+At the time of writing, 222 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
 
 ## Example: synthetic altitude sweep
 
@@ -598,6 +598,8 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 - **Readers.** The ANSYS Forte readers recognize common header aliases but have not yet been tested on real exports. Unrecognized headers are mapped in the case file (`[trace.columns]`), and the sign of the wall heat-loss column must be checked on the first real case (`wall_heat_loss_sign`); see the [CFD output checklist](docs/forte-output-checklist.md).
 
 ## Roadmap
+
+Planned work is tracked as issues in the [v0.5.0 milestone](https://github.com/alpztel/combusta/milestone/1).
 
 - Validation on real ANSYS Forte cases and test-bench data.
 - Pre-chamber analysis with burned/unburned composition tracking in both volumes (the current two-volume analysis uses frozen composition).
