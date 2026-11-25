@@ -27,3 +27,11 @@ combusta compare examples/cases/synthetic_slow_burn examples/cases/synthetic_fas
 ```
 
 Two manufactured hydrogen cases (λ = 2, 2000 rpm) whose pressure traces were integrated forward from a prescribed Wiebe heat release (`combusta.synthetic.manufactured_cycle`). They differ only in burn start and duration and do not represent any particular combustion system. `synthetic_slow_burn` uses the ANSYS Forte cylinder-average layout (MPa, cm³, wall heat loss reported as negative); `synthetic_fast_burn` is a test-bench style table (bar, crank angle and pressure only). Both recover the prescribed heat release of 831.83 J, which makes them a check of unit conversion, sign handling, and temperature reconstruction. The uncertainties in their case files are illustrative, not the result of a grid study. The `cases/` directory is committed; regenerate it with the script. The report goes to `examples/output/`, which is not tracked.
+
+## `matched_sweep_demo.py` — comparison at matched CA50 and at MBT timing
+
+```bash
+python examples/matched_sweep_demo.py
+```
+
+Writes two manufactured spark-timing sweeps (six cases each) as case files with a `configuration` key and compares them with `write_matched_report`, once at CA50 = 8 deg ATDC and once each at its own MBT timing. The configurations differ only in burn duration and ignition delay. Their wall heat loss is prescribed with a shape that does not depend on phasing, so their MBT phasing (CA50 near TDC) is not representative of real engines; the example shows the method, not a combustion-system result. Output goes to `examples/output/` (not tracked).

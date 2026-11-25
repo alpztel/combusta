@@ -36,6 +36,7 @@ format = "forte_thermo"           # forte_thermo | csv
 | `name` | string | yes | Case label in tables and figures; must be unique within one comparison. |
 | `source` | string | yes | Provenance: `cfd`, `test_bench`, `model_1d`, or `synthetic`. Reports with a `synthetic` case carry a warning banner. |
 | `description` | string | no | Stored in the case metadata. |
+| `configuration` | string | no | Engine configuration the case belongs to (for example `open_chamber`). Cases with the same value form one spark-timing sweep for `combusta matched`; required there. |
 
 ### `[geometry]`
 
@@ -137,3 +138,12 @@ combusta compare open prechamber --out report --baseline open_chamber
 ```
 
 `compare` accepts case files or directories containing `case.toml` and writes `report.md` (provenance with SHA-256 of every trace, data checks, comparison table, analysis settings and notes), `metrics.csv`, and `pressure_heat_release.png`. Options: `--combustion-window START END`, `--gross-window START END`, `--revolutions 1|2`, `--no-figure`.
+
+### Matched comparison of spark-timing sweeps
+
+```bash
+combusta matched open/*/ prechamber/*/ --ca50 8 --out matched      # at a common CA50
+combusta matched open/*/ prechamber/*/ --mbt --out matched_mbt     # each at its MBT timing
+```
+
+`matched` groups the cases by `configuration`; every configuration needs at least two cases, and an MBT comparison needs `ignition_timing_deg` in every case. All metrics are interpolated within each sweep with a monotone cubic (PCHIP); targets outside a sweep are rejected. The MBT timing is the vertex of a quadratic least-squares fit of gross IMEP over the `--fit-points` timings (default 5) around the sweep maximum; it is reported with its standard uncertainty when more than three points are fitted. Numerical uncertainties from `[uncertainty]` are interpolated linearly between the two bracketing cases. Output: `matched_report.md`, `matched_metrics.csv` (including `interpolation_spread_si`, the difference between cubic and linear interpolation, as an indicator of sweep resolution), and `sweep_overview.png`. The same analysis options as for `compare` apply, plus `--baseline`.

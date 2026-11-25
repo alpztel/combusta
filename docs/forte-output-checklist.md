@@ -48,7 +48,14 @@ If the pre-chamber is not defined as a separate region or monitor volume in the 
 
 ## 4. Simulation plan for a fair comparison
 
-Comparing two combustion systems at the same spark timing compares them at different combustion phasing, because their burn rates differ. Plan each configuration as a **spark-timing sweep** (several timings bracketing the timing of maximum IMEP) at the same fuel mass and λ, so that the configurations can be compared at matched CA50 or at their own maximum-brake-torque timing. Comparison at matched conditions is planned for Combusta 0.4.
+Comparing two combustion systems at the same spark timing compares them at different combustion phasing, because their burn rates differ. Plan each configuration as a **spark-timing sweep** (several timings bracketing the timing of maximum IMEP) at the same fuel mass and λ, so that the configurations can be compared at matched CA50 or at their own maximum-brake-torque timing (`combusta matched`, see [case-file.md](case-file.md#command-line)).
+
+Practical consequences for the sweep:
+
+- Store the spark timing of every run as `ignition_timing_deg` and the configuration name as `configuration` in its case file.
+- For an MBT comparison the IMEP maximum must lie **inside** the sweep, with at least one timing on each side; five or more timings around the maximum also give an uncertainty for the MBT timing. If knock or pre-ignition prevents reaching the maximum, compare at matched CA50 instead.
+- For a matched-CA50 comparison the target CA50 must lie inside the CA50 range of every configuration; Combusta does not extrapolate.
+- Keep speed, λ, and fuel mass the same across all runs; the matched report warns when they differ by more than 1 %.
 
 ## 5. Export and first use
 

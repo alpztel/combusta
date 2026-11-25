@@ -94,14 +94,16 @@ from combusta.io import (
 from combusta.plotting import (
     AltitudeSprayPlotCase,
     CaseOverlayTrace,
+    SweepPlotSeries,
     ThermoOverlayTrace,
     plot_altitude_spray_comparison,
     plot_case_overlay,
+    plot_sweep_overview,
     plot_gci_convergence,
     plot_pv_log_diagram,
     plot_thermo_diagnostics,
 )
-from combusta.report import ComparisonReport, write_comparison_report
+from combusta.report import ComparisonReport, MatchedReport, write_comparison_report, write_matched_report
 from combusta.signal.filtering import (
     butterworth_zero_phase,
     compute_derivative,
@@ -116,6 +118,17 @@ from combusta.spray import (
     evaluate_altitude_spray_risk,
     hiroyasu_arai_penetration,
     naber_siebers_penetration,
+)
+from combusta.sweep import (
+    MatchedComparison,
+    MatchedPoint,
+    MBTResult,
+    Sweep,
+    SweepError,
+    build_sweep,
+    compare_matched,
+    find_mbt,
+    metrics_at,
 )
 from combusta.synthetic import ManufacturedCycle, manufactured_cycle, write_case_directory
 from combusta.thermo import (
@@ -185,6 +198,19 @@ from combusta.vv import (
 __version__ = "0.3.0"
 
 __all__ = [
+    "MBTResult",
+    "MatchedComparison",
+    "MatchedPoint",
+    "MatchedReport",
+    "Sweep",
+    "SweepError",
+    "SweepPlotSeries",
+    "build_sweep",
+    "compare_matched",
+    "find_mbt",
+    "metrics_at",
+    "plot_sweep_overview",
+    "write_matched_report",
     "FUEL_ALIASES",
     "CaseFileError",
     "CaseOverlayTrace",

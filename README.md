@@ -87,6 +87,17 @@ combusta compare examples/cases/synthetic_slow_burn examples/cases/synthetic_fas
 
 `inspect` lists the columns of an export, their units, and the field each is matched to. `compare` writes `report.md` (case provenance with the SHA-256 of every trace, data checks, the comparison table with significance against the declared uncertainties, analysis settings), `metrics.csv`, and a pressure / heat-release overlay. Before running simulations, read the [CFD output checklist](docs/forte-output-checklist.md): it lists the outputs the analysis needs, including those for a pre-chamber study.
 
+### Compare configurations at matched combustion phasing
+
+Comparing two combustion systems at the same spark timing mixes the effect of the system with the effect of combustion phasing. Give every case of a spark-timing sweep the same `configuration` key in its `case.toml`, then compare the configurations at a common CA50 or each at its own MBT timing:
+
+```bash
+combusta matched open/*/ prechamber/*/ --ca50 8 --out matched
+combusta matched open/*/ prechamber/*/ --mbt --out matched_mbt
+```
+
+Metrics are interpolated within each sweep (no extrapolation); the MBT timing comes from a quadratic fit of gross IMEP around the sweep maximum, with its standard uncertainty ([Section 9](#9-case-comparison)).
+
 ### Compare two engine configurations in Python
 
 ```python
@@ -147,7 +158,8 @@ print(result.summary())
 | `combusta.case` | `EngineCase`, `OperatingPoint`, `CycleTrace`; provenance (`cfd`, `test_bench`, `model_1d`, `synthetic`); Forte adapter; volume consistency check |
 | `combusta.casefile` | `load_case`: engine cases from `case.toml` files with strict key checking and trace provenance (SHA-256) |
 | `combusta.compare` | `compute_cycle_metrics`, `compare_cases`, `uncertainty_from_gci`; Markdown and pandas output |
-| `combusta.report`, `combusta.cli` | `write_comparison_report`; the `combusta inspect` and `combusta compare` commands |
+| `combusta.sweep` | Spark-timing sweeps: `metrics_at` (interpolation to a target CA50 or spark timing), `find_mbt` (quadratic MBT fit with uncertainty), `compare_matched` |
+| `combusta.report`, `combusta.cli` | `write_comparison_report`, `write_matched_report`; the `combusta inspect`, `combusta compare`, and `combusta matched` commands |
 | `combusta.synthetic` | Manufactured cycles with known heat release (`manufactured_cycle`) and their case files, for testing a pipeline before real data exist |
 | `combusta.thermo` | Fuels and stoichiometry, NASA 7-coefficient polynomials, slider-crank kinematics, heat release, burn fractions, IMEP, Woschni and Hohenberg heat transfer, knock metrics, TDC phasing check |
 | `combusta.emissions` | Exhaust composition, ppm to mass (wet/dry), specific emissions, emission indices, combustion efficiency |
@@ -372,6 +384,18 @@ U_\Delta = \sqrt{U_a^2 + U_b^2},
 
 Combining in quadrature assumes independent numerical errors. Designs meshed with the same strategy usually have positively correlated errors, which makes the test conservative.
 
+**Matched conditions.** Configurations with different burn rates reach different combustion phasing at the same spark timing. `compare_matched` therefore compares spark-timing sweeps either at a common CA50, interpolating every metric with a monotone cubic Hermite interpolant (PCHIP; Fritsch & Carlson, 1980) without extrapolation, or at each configuration's MBT timing. MBT is the vertex of a least-squares parabola $`y = a + b\,\theta + c\,\theta^2`$ fitted to gross IMEP around the sweep maximum, with first-order uncertainty from the coefficient covariance $`\boldsymbol{\Sigma} = s^2(\mathbf{X}^\mathsf{T}\mathbf{X})^{-1}`$ (JCGM 100:2008):
+
+```math
+\theta_\mathrm{MBT} = -\frac{b}{2c},
+\qquad
+u^2(\theta_\mathrm{MBT}) = \mathbf{g}^\mathsf{T}\boldsymbol{\Sigma}\,\mathbf{g},
+\qquad
+\mathbf{g} = \left(0,\ -\frac{1}{2c},\ \frac{b}{2c^2}\right)
+```
+
+Defining MBT on gross IMEP assumes friction and pumping work do not change with spark timing. An unbracketed maximum (knock- or pre-ignition-limited sweeps) is reported as an error instead of being extrapolated.
+
 ### 10. Auto-ignition
 
 Arrhenius-type ignition delay with pressure in bar (Wolfer, 1938; Assanis et al., 2003):
@@ -486,7 +510,9 @@ Verification checks that the equations are implemented correctly; it says nothin
 
 | `test_12_data_intake` | A manufactured hydrogen cycle written as a Forte-style file (MPa, cm<sup>3</sup>, negative heat-loss sign) and as a bench table (bar, no volume or temperature) gives the same metrics and its exact heat release (relative error < 2·10<sup>-4</sup>); composition-dependent temperature reconstruction; column mapping, case-file validation, report, and command line | Manufactured solution (Roache, 1998) |
 
-At the time of writing, 170 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
+| `test_13_matched_comparison` | Exact vertex of a parabola; delta-method vertex uncertainty against a 4000-sample Monte Carlo experiment; PCHIP reproduces sweep members and linear data; two manufactured sweeps with the same burn law but a 2 deg longer ignition delay agree at matched CA50 (IMEP and efficiency within 0.1 %) and shift MBT timing by 2 deg | JCGM 100:2008; Fritsch & Carlson (1980) |
+
+At the time of writing, 190 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
 
 ## Example: synthetic altitude sweep
 
@@ -647,15 +673,16 @@ ANSYS and Forte are trademarks of their respective owner; Combusta is an indepen
 29. National Institute of Standards and Technology (2020). *A Summary of Industrial Verification, Validation, and Uncertainty Quantification Procedures in Computational Fluid Dynamics*. NIST IR 8298. https://doi.org/10.6028/NIST.IR.8298
 30. Eça, L., & Hoekstra, M. (2014). A procedure for the estimation of the numerical uncertainty of CFD calculations based on grid refinement studies. *Journal of Computational Physics*, 262, 104–130. https://doi.org/10.1016/j.jcp.2014.01.006
 
-**Signal processing**
+**Signal processing and interpolation**
 
 31. Savitzky, A., & Golay, M. J. E. (1964). Smoothing and differentiation of data by simplified least squares procedures. *Analytical Chemistry*, 36(8), 1627–1639. https://doi.org/10.1021/ac60214a047
 32. Fornberg, B. (1988). Generation of finite difference formulas on arbitrarily spaced grids. *Mathematics of Computation*, 51(184), 699–706. https://doi.org/10.1090/S0025-5718-1988-0935077-0
+33. Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation. *SIAM Journal on Numerical Analysis*, 17(2), 238–246. https://doi.org/10.1137/0717021
 
 **Standards and data sources**
 
-33. ISO 2533:1975. *Standard Atmosphere*. International Organization for Standardization.
-34. ISO 8178-1. *Reciprocating internal combustion engines — Exhaust emission measurement — Part 1: Test-bed measurement systems of gaseous and particulate emissions*. International Organization for Standardization.
-35. U.S. Code of Federal Regulations, Title 40, Part 1065. *Engine-Testing Procedures*.
-36. Thompson, A., & Taylor, B. N. (2008). *Guide for the Use of the International System of Units (SI)*. NIST Special Publication 811.
-37. Engine Combustion Network. Sandia National Laboratories. https://ecn.sandia.gov
+34. ISO 2533:1975. *Standard Atmosphere*. International Organization for Standardization.
+35. ISO 8178-1. *Reciprocating internal combustion engines — Exhaust emission measurement — Part 1: Test-bed measurement systems of gaseous and particulate emissions*. International Organization for Standardization.
+36. U.S. Code of Federal Regulations, Title 40, Part 1065. *Engine-Testing Procedures*.
+37. Thompson, A., & Taylor, B. N. (2008). *Guide for the Use of the International System of Units (SI)*. NIST Special Publication 811.
+38. Engine Combustion Network. Sandia National Laboratories. https://ecn.sandia.gov
