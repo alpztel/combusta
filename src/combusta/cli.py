@@ -1,4 +1,4 @@
-"""Command-line interface: ``combusta inspect``, ``compare``, ``matched``, and ``prechamber``.
+"""Command-line interface: ``combusta inspect``, ``compare``, ``matched``, ``prechamber``, ``measurement``.
 
 ``combusta inspect FILE`` lists the columns of a CSV export, their units, and the
 canonical fields they are matched to; use it on the first file of a new format and
@@ -13,6 +13,9 @@ matched CA50 or at their own MBT timing (see :mod:`combusta.sweep`).
 
 ``combusta prechamber CASE`` runs the two-volume pre-chamber analysis of a case file
 with a ``[pre_chamber]`` table (see :mod:`combusta.prechamber`).
+
+``combusta measurement CASE`` propagates pressure-measurement errors (TDC phasing,
+pegging offset, gain, noise) into the cycle metrics (see :mod:`combusta.measurement`).
 """
 
 from __future__ import annotations
@@ -106,6 +109,25 @@ def _prechamber(args: argparse.Namespace) -> int:
     return 0
 
 
+def _measurement(args: argparse.Namespace) -> int:
+    from combusta.measurement import PressureMeasurementUncertainty
+    from combusta.report import write_measurement_report
+
+    given = {k: v for k, v in (("tdc_offset_deg", args.tdc), ("pegging_offset_pa", args.offset),
+                               ("gain_relative", args.gain), ("noise_pa", args.noise)) if v is not None}
+    inputs = PressureMeasurementUncertainty(**given) if given else None
+    report = write_measurement_report(
+        args.case, args.out, inputs=inputs, n_samples=args.samples, seed=args.seed,
+        savgol_window=args.savgol,
+        combustion_window_deg=(float(args.combustion_window[0]), float(args.combustion_window[1])),
+        gross_window_deg=(float(args.gross_window[0]), float(args.gross_window[1])),
+        revolutions_per_cycle=int(args.revolutions),
+    )
+    print(report.result.to_markdown())
+    print(f"\nWrote {report.report_path}, {report.metrics_path}")
+    return 0
+
+
 def _add_analysis_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--baseline", help="Baseline name (default: the first).")
     p.add_argument("--combustion-window", nargs=2, type=float, default=(-40.0, 90.0),
@@ -159,6 +181,22 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Analysis window [deg ATDC].")
     p_pc.add_argument("--no-figure", action="store_true", help="Do not write the figure.")
     p_pc.set_defaults(func=_prechamber)
+
+    p_m = sub.add_parser("measurement", help="Uncertainty of cycle metrics from pressure-measurement errors.")
+    p_m.add_argument("case", type=Path, help="case.toml or a directory containing one.")
+    p_m.add_argument("--tdc", type=float, help="Standard uncertainty of TDC phasing [deg].")
+    p_m.add_argument("--offset", type=float, help="Standard uncertainty of the pegging offset [Pa].")
+    p_m.add_argument("--gain", type=float, help="Relative standard uncertainty of the transducer gain [-].")
+    p_m.add_argument("--noise", type=float, help="Standard deviation of sample noise [Pa].")
+    p_m.add_argument("--samples", type=int, default=500, help="Monte Carlo trials (0 = linear only).")
+    p_m.add_argument("--seed", type=int, default=0, help="Random seed.")
+    p_m.add_argument("--savgol", type=int, metavar="WINDOW",
+                     help="Apply a zero-phase cubic Savitzky-Golay filter of this odd window to every trace.")
+    p_m.add_argument("--out", type=Path, default=Path("combusta_measurement"), help="Output directory.")
+    p_m.add_argument("--combustion-window", nargs=2, type=float, default=(-40.0, 90.0), metavar=("START", "END"))
+    p_m.add_argument("--gross-window", nargs=2, type=float, default=(-180.0, 180.0), metavar=("START", "END"))
+    p_m.add_argument("--revolutions", type=int, choices=(1, 2), default=2)
+    p_m.set_defaults(func=_measurement)
     return parser
 
 

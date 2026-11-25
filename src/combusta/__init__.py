@@ -104,6 +104,13 @@ from combusta.plotting import (
     plot_pv_log_diagram,
     plot_thermo_diagnostics,
 )
+from combusta.measurement import (
+    MeasurementUncertaintyResult,
+    MetricUncertainty,
+    PressureMeasurementUncertainty,
+    perturb_pressure,
+    pressure_measurement_uncertainty,
+)
 from combusta.prechamber import (
     PreChamberGeometry,
     PreChamberMetrics,
@@ -117,10 +124,12 @@ from combusta.prechamber import (
 from combusta.report import (
     ComparisonReport,
     MatchedReport,
+    MeasurementReport,
     PreChamberReport,
     analyze_case_pre_chamber,
     write_comparison_report,
     write_matched_report,
+    write_measurement_report,
     write_pre_chamber_report,
 )
 from combusta.signal.filtering import (
@@ -224,6 +233,13 @@ from combusta.vv import (
 __version__ = "0.3.0"
 
 __all__ = [
+    "MeasurementReport",
+    "MeasurementUncertaintyResult",
+    "MetricUncertainty",
+    "PressureMeasurementUncertainty",
+    "perturb_pressure",
+    "pressure_measurement_uncertainty",
+    "write_measurement_report",
     "ManufacturedPreChamberCycle",
     "PreChamberGeometry",
     "PreChamberInput",

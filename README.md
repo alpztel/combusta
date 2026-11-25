@@ -168,9 +168,10 @@ print(result.summary())
 | `combusta.case` | `EngineCase`, `OperatingPoint`, `CycleTrace`; provenance (`cfd`, `test_bench`, `model_1d`, `synthetic`); Forte adapter; volume consistency check |
 | `combusta.casefile` | `load_case`: engine cases from `case.toml` files with strict key checking and trace provenance (SHA-256) |
 | `combusta.compare` | `compute_cycle_metrics`, `compare_cases`, `uncertainty_from_gci`; Markdown and pandas output |
+| `combusta.measurement` | Uncertainty of cycle metrics from pressure-measurement errors (TDC phasing, pegging offset, gain, noise): linear budget and Monte Carlo |
 | `combusta.prechamber` | Two-volume pre-chamber analysis: isentropic orifice flow, open-system heat release of both volumes, jet timing and mass, discharge-coefficient fit |
 | `combusta.sweep` | Spark-timing sweeps: `metrics_at` (interpolation to a target CA50 or spark timing), `find_mbt` (quadratic MBT fit with uncertainty), `compare_matched` |
-| `combusta.report`, `combusta.cli` | `write_comparison_report`, `write_matched_report`, `write_pre_chamber_report`; the `combusta inspect`, `compare`, `matched`, and `prechamber` commands |
+| `combusta.report`, `combusta.cli` | `write_comparison_report`, `write_matched_report`, `write_pre_chamber_report`, `write_measurement_report`; the `combusta inspect`, `compare`, `matched`, `prechamber`, and `measurement` commands |
 | `combusta.synthetic` | Manufactured cycles with known heat release (`manufactured_cycle`) and their case files, for testing a pipeline before real data exist |
 | `combusta.thermo` | Fuels and stoichiometry, NASA 7-coefficient polynomials, slider-crank kinematics, heat release, burn fractions, IMEP, Woschni and Hohenberg heat transfer, knock metrics, TDC phasing check |
 | `combusta.emissions` | Exhaust composition, ppm to mass (wet/dry), specific emissions, emission indices, combustion efficiency |
@@ -381,6 +382,14 @@ u_D = \sqrt{\frac{s^2}{n} + u_B^2}
 
 $`u_D`$ combines the Type A uncertainty of a mean of $`n`$ repeated measurements with a Type B (systematic) contribution (JCGM 100:2008). The default $`k_\mathrm{GCI} = 1.15`$ follows the range summarized in NIST IR 8298 for V&V 20 (about 2 for a Gaussian error distribution, 1.1–1.15 for a shifted one); it is a user choice and should be reported.
 
+**Pressure-measurement uncertainty.** The systematic part of $`u_D`$ for pressure-derived metrics comes from the measurement chain. Crank-angle phasing and transducer sensitivity are among the main sources of IMEP error (Brunt & Emtage, 1996), and piezoelectric transducers need absolute referencing, or pegging (Randolph, 1990). `pressure_measurement_uncertainty` models the measured trace as
+
+```math
+p_\mathrm{meas}(\theta) = (1 + \varepsilon_g)\,p(\theta + \delta_\theta) + \Delta p_0 + n(\theta)
+```
+
+with independent, normally distributed TDC phasing error $`\delta_\theta`$, gain error $`\varepsilon_g`$, pegging offset $`\Delta p_0`$, and sample noise $`n`$. The budget gives each systematic contribution $`|c_i u_i| = |y(x_i = u_i) - y(x_i = -u_i)|/2`$ and their root-sum-square (JCGM 100:2008); a Monte Carlo propagation of all four sources (JCGM 101:2008) checks linearity and adds noise. Its standard deviation is reported with the standard error $`u_\mathrm{MC}/\sqrt{2(M-1)}`$; the number of trials is too small for the coverage intervals of JCGM 101, so none are given. Two exact properties serve as tests: a pegging offset leaves gross IMEP integrated from BDC to BDC unchanged, and $`d\,\mathrm{IMEP}/d\delta_\theta = V_d^{-1}\int (dp/d\theta)(dV/d\theta)\,d\theta`$. Thermal shock, encoder resolution, and geometry errors are not modeled.
+
 ### 9. Case comparison
 
 For a metric with values $`\phi_a`$ (baseline) and $`\phi_b`$ and expanded numerical uncertainties $`U_a`$, $`U_b`$:
@@ -543,7 +552,9 @@ Verification checks that the equations are implemented correctly; it says nothin
 
 | `test_14_prechamber` | Critical pressure ratio 0.5283 and choked flow function 0.6847 (γ = 1.4); continuity at the critical ratio; isentropic blowdown of a rigid zone; a manufactured two-volume cycle inverted from zone masses, zone temperatures, and the orifice model recovers both heat releases (pre-chamber within 0.1 %, main chamber within 0.01 %) and the discharge coefficient (0.700); case file, report, and command line | Heywood (2018) App. C; manufactured solution |
 
-At the time of writing, 209 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
+| `test_15_measurement_uncertainty` | Pegging offset leaves BDC-to-BDC IMEP unchanged and shifts peak pressure by the offset; gain scales IMEP and peak pressure exactly; TDC phasing shifts the angle of peak pressure by the error; IMEP sensitivity to phasing equals the integral of dP/dθ·dV/dθ; Monte Carlo standard deviation within 3 standard errors of linear propagation (M = 1000) | JCGM 100:2008, JCGM 101:2008 |
+
+At the time of writing, 221 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
 
 ## Example: synthetic altitude sweep
 
@@ -590,7 +601,7 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 
 - Validation on real ANSYS Forte cases and test-bench data.
 - Pre-chamber analysis with burned/unburned composition tracking in both volumes (the current two-volume analysis uses frozen composition).
-- Uncertainty of pressure-derived metrics from measurement errors (TDC offset, pegging, gain, noise).
+- Thermal-shock error of piezoelectric transducers in the measurement-uncertainty model.
 - Multi-cycle test-bench analysis: cycle averaging, coefficient of variation, pressure pegging.
 - Readers for further CFD and 1D formats.
 - Liquid-length scaling (Siebers, 1999) and least-squares grid uncertainty (Eça & Hoekstra, 2014) for noisy or adaptive-mesh studies.
@@ -649,7 +660,7 @@ Combusta depends on the following packages. They are installed separately and ar
 
 ### Standards
 
-ASME V&V 20, ISO 2533, ISO 8178, 40 CFR Part 1065, and JCGM 100 (GUM) are cited for the methods they describe. Combusta implements published equations independently and reproduces no text from these documents. Use of Combusta does not by itself establish compliance with any standard.
+ASME V&V 20, ISO 2533, ISO 8178, 40 CFR Part 1065, JCGM 100 (GUM), and JCGM 101 are cited for the methods they describe. Combusta implements published equations independently and reproduces no text from these documents. Use of Combusta does not by itself establish compliance with any standard.
 
 ### Trademarks and proprietary data
 
@@ -668,54 +679,57 @@ ANSYS and Forte are trademarks of their respective owner; Combusta is an indepen
 7. Eng, J. A. (2002). Characterization of pressure waves in HCCI combustion. *SAE Technical Paper* 2002-01-2859. https://doi.org/10.4271/2002-01-2859
 8. Turns, S. R. (2012). *An Introduction to Combustion: Concepts and Applications* (3rd ed.). McGraw-Hill.
 9. Toulson, E., Schock, H., & Attard, W. (2010). A review of pre-chamber initiated jet ignition combustion systems. *SAE Technical Paper* 2010-01-2263. https://doi.org/10.4271/2010-01-2263
+10. Brunt, M. F. J., & Emtage, A. L. (1996). Evaluation of IMEP routines and analysis errors. *SAE Technical Paper* 960609. https://doi.org/10.4271/960609
+11. Randolph, A. L. (1990). Methods of processing cylinder-pressure transducer signals to maximize data accuracy. *SAE Technical Paper* 900170. https://doi.org/10.4271/900170
 
 **Thermochemical data**
 
-10. Gordon, S., & McBride, B. J. (1994). *Computer Program for Calculation of Complex Chemical Equilibrium Compositions and Applications. I. Analysis*. NASA Reference Publication 1311.
-11. McBride, B. J., Zehe, M. J., & Gordon, S. (2002). *NASA Glenn Coefficients for Calculating Thermodynamic Properties of Individual Species*. NASA/TP-2002-211556.
-12. Smith, G. P., Golden, D. M., Frenklach, M., Moriarty, N. W., Eiteneer, B., Goldenberg, M., Bowman, C. T., Hanson, R. K., Song, S., Gardiner, W. C., Lissianski, V. V., & Qin, Z. *GRI-Mech 3.0*. http://combustion.berkeley.edu/gri-mech/
-13. Chase, M. W. (1998). *NIST-JANAF Thermochemical Tables* (4th ed.). Journal of Physical and Chemical Reference Data, Monograph 9.
-14. Ruscic, B., & Bross, D. H. *Active Thermochemical Tables (ATcT)*. Argonne National Laboratory. https://atct.anl.gov
-15. Wieser, M. E., & Berglund, M. (2009). Atomic weights of the elements 2007 (IUPAC Technical Report). *Pure and Applied Chemistry*, 81(11), 2131–2156.
+12. Gordon, S., & McBride, B. J. (1994). *Computer Program for Calculation of Complex Chemical Equilibrium Compositions and Applications. I. Analysis*. NASA Reference Publication 1311.
+13. McBride, B. J., Zehe, M. J., & Gordon, S. (2002). *NASA Glenn Coefficients for Calculating Thermodynamic Properties of Individual Species*. NASA/TP-2002-211556.
+14. Smith, G. P., Golden, D. M., Frenklach, M., Moriarty, N. W., Eiteneer, B., Goldenberg, M., Bowman, C. T., Hanson, R. K., Song, S., Gardiner, W. C., Lissianski, V. V., & Qin, Z. *GRI-Mech 3.0*. http://combustion.berkeley.edu/gri-mech/
+15. Chase, M. W. (1998). *NIST-JANAF Thermochemical Tables* (4th ed.). Journal of Physical and Chemical Reference Data, Monograph 9.
+16. Ruscic, B., & Bross, D. H. *Active Thermochemical Tables (ATcT)*. Argonne National Laboratory. https://atct.anl.gov
+17. Wieser, M. E., & Berglund, M. (2009). Atomic weights of the elements 2007 (IUPAC Technical Report). *Pure and Applied Chemistry*, 81(11), 2131–2156.
 
 **Auto-ignition**
 
-16. Wolfer, H. H. (1938). Der Zündverzug im Dieselmotor. *VDI-Forschungsheft* 392.
-17. Livengood, J. C., & Wu, P. C. (1955). Correlation of autoignition phenomena in internal combustion engines and rapid compression machines. *Fifth Symposium (International) on Combustion*, 347–356. https://doi.org/10.1016/S0082-0784(55)80047-1
-18. Hardenberg, H. O., & Hase, F. W. (1979). An empirical formula for computing the pressure rise delay of a fuel from its cetane number and from the relevant parameters of direct-injection diesel engines. *SAE Technical Paper* 790493. https://doi.org/10.4271/790493
-19. Assanis, D. N., Filipi, Z. S., Fiveland, S. B., & Syrimis, M. (2003). A predictive ignition delay correlation under steady-state and transient operation of a direct injection diesel engine. *Journal of Engineering for Gas Turbines and Power*, 125(2), 450–457. https://doi.org/10.1115/1.1563238
+18. Wolfer, H. H. (1938). Der Zündverzug im Dieselmotor. *VDI-Forschungsheft* 392.
+19. Livengood, J. C., & Wu, P. C. (1955). Correlation of autoignition phenomena in internal combustion engines and rapid compression machines. *Fifth Symposium (International) on Combustion*, 347–356. https://doi.org/10.1016/S0082-0784(55)80047-1
+20. Hardenberg, H. O., & Hase, F. W. (1979). An empirical formula for computing the pressure rise delay of a fuel from its cetane number and from the relevant parameters of direct-injection diesel engines. *SAE Technical Paper* 790493. https://doi.org/10.4271/790493
+21. Assanis, D. N., Filipi, Z. S., Fiveland, S. B., & Syrimis, M. (2003). A predictive ignition delay correlation under steady-state and transient operation of a direct injection diesel engine. *Journal of Engineering for Gas Turbines and Power*, 125(2), 450–457. https://doi.org/10.1115/1.1563238
 
 **Fuel sprays**
 
-20. Hiroyasu, H., & Arai, M. (1990). Structures of fuel sprays in diesel engines. *SAE Technical Paper* 900475. https://doi.org/10.4271/900475
-21. Naber, J. D., & Siebers, D. L. (1996). Effects of gas density and vaporization on penetration and dispersion of diesel sprays. *SAE Technical Paper* 960034. https://doi.org/10.4271/960034
-22. Siebers, D. L. (1999). Scaling liquid-phase fuel penetration in diesel sprays based on mixing-limited vaporization. *SAE Technical Paper* 1999-01-0528. https://doi.org/10.4271/1999-01-0528
+22. Hiroyasu, H., & Arai, M. (1990). Structures of fuel sprays in diesel engines. *SAE Technical Paper* 900475. https://doi.org/10.4271/900475
+23. Naber, J. D., & Siebers, D. L. (1996). Effects of gas density and vaporization on penetration and dispersion of diesel sprays. *SAE Technical Paper* 960034. https://doi.org/10.4271/960034
+24. Siebers, D. L. (1999). Scaling liquid-phase fuel penetration in diesel sprays based on mixing-limited vaporization. *SAE Technical Paper* 1999-01-0528. https://doi.org/10.4271/1999-01-0528
 
 **Second-Law analysis**
 
-23. Kotas, T. J. (1995). *The Exergy Method of Thermal Plant Analysis* (reprint ed.). Krieger Publishing.
-24. Caton, J. A. (2000). A review of investigations using the second law of thermodynamics to study internal-combustion engines. *SAE Technical Paper* 2000-01-1081. https://doi.org/10.4271/2000-01-1081
-25. Rakopoulos, C. D., & Giakoumis, E. G. (2006). Second-law analyses applied to internal combustion engines operation. *Progress in Energy and Combustion Science*, 32(1), 2–47.
+25. Kotas, T. J. (1995). *The Exergy Method of Thermal Plant Analysis* (reprint ed.). Krieger Publishing.
+26. Caton, J. A. (2000). A review of investigations using the second law of thermodynamics to study internal-combustion engines. *SAE Technical Paper* 2000-01-1081. https://doi.org/10.4271/2000-01-1081
+27. Rakopoulos, C. D., & Giakoumis, E. G. (2006). Second-law analyses applied to internal combustion engines operation. *Progress in Energy and Combustion Science*, 32(1), 2–47.
 
 **Verification, validation, and uncertainty**
 
-26. Roache, P. J. (1998). *Verification and Validation in Computational Science and Engineering*. Hermosa Publishers.
-27. Celik, I. B., Ghia, U., Roache, P. J., Freitas, C. J., Coleman, H., & Raad, P. E. (2008). Procedure for estimation and reporting of uncertainty due to discretization in CFD applications. *Journal of Fluids Engineering*, 130(7), 078001. https://doi.org/10.1115/1.2960953
-28. ASME (2009). *V&V 20-2009: Standard for Verification and Validation in Computational Fluid Dynamics and Heat Transfer*. American Society of Mechanical Engineers.
-29. JCGM (2008). *JCGM 100:2008 — Evaluation of measurement data: Guide to the expression of uncertainty in measurement*. Joint Committee for Guides in Metrology.
-30. National Institute of Standards and Technology (2020). *A Summary of Industrial Verification, Validation, and Uncertainty Quantification Procedures in Computational Fluid Dynamics*. NIST IR 8298. https://doi.org/10.6028/NIST.IR.8298
-31. Eça, L., & Hoekstra, M. (2014). A procedure for the estimation of the numerical uncertainty of CFD calculations based on grid refinement studies. *Journal of Computational Physics*, 262, 104–130. https://doi.org/10.1016/j.jcp.2014.01.006
+28. Roache, P. J. (1998). *Verification and Validation in Computational Science and Engineering*. Hermosa Publishers.
+29. Celik, I. B., Ghia, U., Roache, P. J., Freitas, C. J., Coleman, H., & Raad, P. E. (2008). Procedure for estimation and reporting of uncertainty due to discretization in CFD applications. *Journal of Fluids Engineering*, 130(7), 078001. https://doi.org/10.1115/1.2960953
+30. ASME (2009). *V&V 20-2009: Standard for Verification and Validation in Computational Fluid Dynamics and Heat Transfer*. American Society of Mechanical Engineers.
+31. JCGM (2008). *JCGM 100:2008 — Evaluation of measurement data: Guide to the expression of uncertainty in measurement*. Joint Committee for Guides in Metrology.
+32. JCGM (2008). *JCGM 101:2008 — Evaluation of measurement data: Supplement 1 to the "Guide to the expression of uncertainty in measurement" — Propagation of distributions using a Monte Carlo method*. Joint Committee for Guides in Metrology.
+33. National Institute of Standards and Technology (2020). *A Summary of Industrial Verification, Validation, and Uncertainty Quantification Procedures in Computational Fluid Dynamics*. NIST IR 8298. https://doi.org/10.6028/NIST.IR.8298
+34. Eça, L., & Hoekstra, M. (2014). A procedure for the estimation of the numerical uncertainty of CFD calculations based on grid refinement studies. *Journal of Computational Physics*, 262, 104–130. https://doi.org/10.1016/j.jcp.2014.01.006
 
 **Signal processing and interpolation**
 
-32. Savitzky, A., & Golay, M. J. E. (1964). Smoothing and differentiation of data by simplified least squares procedures. *Analytical Chemistry*, 36(8), 1627–1639. https://doi.org/10.1021/ac60214a047
-33. Fornberg, B. (1988). Generation of finite difference formulas on arbitrarily spaced grids. *Mathematics of Computation*, 51(184), 699–706. https://doi.org/10.1090/S0025-5718-1988-0935077-0
-34. Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation. *SIAM Journal on Numerical Analysis*, 17(2), 238–246. https://doi.org/10.1137/0717021
+35. Savitzky, A., & Golay, M. J. E. (1964). Smoothing and differentiation of data by simplified least squares procedures. *Analytical Chemistry*, 36(8), 1627–1639. https://doi.org/10.1021/ac60214a047
+36. Fornberg, B. (1988). Generation of finite difference formulas on arbitrarily spaced grids. *Mathematics of Computation*, 51(184), 699–706. https://doi.org/10.1090/S0025-5718-1988-0935077-0
+37. Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation. *SIAM Journal on Numerical Analysis*, 17(2), 238–246. https://doi.org/10.1137/0717021
 
 **Standards and data sources**
 
-35. ISO 2533:1975. *Standard Atmosphere*. International Organization for Standardization.
-36. ISO 8178-1. *Reciprocating internal combustion engines — Exhaust emission measurement — Part 1: Test-bed measurement systems of gaseous and particulate emissions*. International Organization for Standardization.
-37. U.S. Code of Federal Regulations, Title 40, Part 1065. *Engine-Testing Procedures*.
-38. Thompson, A., & Taylor, B. N. (2008). *Guide for the Use of the International System of Units (SI)*. NIST Special Publication 811.
-39. Engine Combustion Network. Sandia National Laboratories. https://ecn.sandia.gov
+38. ISO 2533:1975. *Standard Atmosphere*. International Organization for Standardization.
+39. ISO 8178-1. *Reciprocating internal combustion engines — Exhaust emission measurement — Part 1: Test-bed measurement systems of gaseous and particulate emissions*. International Organization for Standardization.
+40. U.S. Code of Federal Regulations, Title 40, Part 1065. *Engine-Testing Procedures*.
+41. Thompson, A., & Taylor, B. N. (2008). *Guide for the Use of the International System of Units (SI)*. NIST Special Publication 811.
+42. Engine Combustion Network. Sandia National Laboratories. https://ecn.sandia.gov

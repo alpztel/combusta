@@ -126,6 +126,31 @@ p_max = 3.0e4
 ca50 = 0.3
 ```
 
+### `[measurement]`
+
+Standard uncertainties of the cylinder-pressure measurement, used by `combusta measurement` (command-line options override them). All keys are optional; each error is treated as normally distributed and independent of the others.
+
+| Key | Unit | Meaning |
+| :--- | :--- | :--- |
+| `tdc_offset_deg` | deg | Crank-angle phasing (TDC) error |
+| `pegging_offset_pa` | Pa | Absolute pressure referencing error |
+| `gain_relative` | – | Relative transducer sensitivity error (0.01 = 1 %) |
+| `noise_pa` | Pa | Standard deviation of uncorrelated sample noise |
+
+```toml
+[measurement]
+tdc_offset_deg = 0.2
+pegging_offset_pa = 5000.0
+gain_relative = 0.01
+noise_pa = 2000.0
+```
+
+```bash
+combusta measurement bench_case --samples 500 --savgol 21 --out meas
+```
+
+The report gives the contribution of each systematic source (linear propagation) and the Monte Carlo standard deviation of all sources including noise. Use `--savgol WINDOW` when the real data are filtered, so that the noise is filtered the same way. The result is the measurement part of the experimental uncertainty; combine it with the cycle-to-cycle (Type A) uncertainty of the mean (`experimental_uncertainty`) before using it as $u_D$ in a validation.
+
 ### `[pre_chamber]`
 
 Declares a pre-chamber engine for `combusta prechamber`. The case trace then describes the **main chamber only** (its pressure, volume, and optionally temperature and wall heat loss); the pre-chamber volume must not be part of it.
