@@ -100,16 +100,14 @@ class TestUnitIgnitionKinetics:
         assert tau_jet_s > tau_dsl_s
         assert res_jet.activation_energy_j_per_mol > res_dsl.activation_energy_j_per_mol
 
-        res_jet_add = hardenberg_hase_delay(
-            t_tdc, p_tdc, sp, rpm, cetane_number=42.0, pressure_coupling="additive"
-        )
-        res_dsl_add = hardenberg_hase_delay(
-            t_tdc, p_tdc, sp, rpm, cetane_number=52.0, pressure_coupling="additive"
-        )
-        assert float(res_jet_add.ignition_delay_s) > float(res_dsl_add.ignition_delay_s)
+        with pytest.warns(DeprecationWarning, match="not the published"):
+            res_jet_add = hardenberg_hase_delay(
+                t_tdc, p_tdc, sp, rpm, cetane_number=42.0, pressure_coupling="additive"
+            )
+        assert float(res_jet_add.ignition_delay_s) > float(res_jet.ignition_delay_s)
 
         p_subcritical = 1.10e6
-        with pytest.raises(ValueError, match="1.24 MPa physical auto-ignition threshold"):
+        with pytest.raises(ValueError, match="validity range of the Hardenberg-Hase"):
             hardenberg_hase_delay(t_tdc, p_subcritical, sp, rpm, cetane_number=50.0)
 
         with pytest.raises(PhysicalBoundsError):
@@ -191,7 +189,10 @@ class TestStrictAuditIgnitionKinetics:
         ea_calc = compute_apparent_activation_energy(cn)
         assert ea_calc == pytest.approx(ea_expected, rel=1.0e-12)
 
-        t_tdc = 17190.0 / R_UNIVERSAL
+        # Heywood (2018) Eq. 10.37: choose T and p so that both factors of the exponent
+        # equal 1, E_a (1/(R T) - 1/17190) = 1 and (21.2 / (p_bar - 12.4))^0.63 = 1,
+        # giving tau = (0.36 + 0.22 Sp) * e for the published (product) form.
+        t_tdc = 1.0 / (R_UNIVERSAL * (1.0 / ea_expected + 1.0 / 17190.0))
         p_tdc = 3.36e6
         sp = 10.0
         rpm = 2400.0
@@ -221,12 +222,18 @@ class TestStrictAuditIgnitionKinetics:
         rel_diff = (tau_jet - tau_dsl) / tau_dsl
 
         assert tau_jet > tau_dsl
-        assert rel_diff >= 0.095
+        # Ratio of the two delays from Eq. 10.37: only E_a = 618840 / (CN + 25) differs.
+        cn_jet = PREDEFINED_FUELS["JET_A1_JP8"].cetane_number
+        cn_dsl = PREDEFINED_FUELS["EN590_DIESEL"].cetane_number
+        d_ea = 618840.0 / (cn_jet + 25.0) - 618840.0 / (cn_dsl + 25.0)
+        p_factor = (21.2 / (p_real * 1e-5 - 12.4)) ** 0.63
+        expected_ratio = np.exp(d_ea * (1.0 / (R_UNIVERSAL * t_real) - 1.0 / 17190.0) * p_factor)
+        assert 1.0 + rel_diff == pytest.approx(expected_ratio, rel=1e-12)
 
-        with pytest.raises(ValueError, match="1.24 MPa physical auto-ignition threshold"):
+        with pytest.raises(ValueError, match="validity range of the Hardenberg-Hase"):
             hardenberg_hase_delay(t_real, 1.24e6, sp_real, rpm, 50.0)
 
-        with pytest.raises(ValueError, match="1.24 MPa physical auto-ignition threshold"):
+        with pytest.raises(ValueError, match="validity range of the Hardenberg-Hase"):
             hardenberg_hase_delay(t_real, 1.0e6, sp_real, rpm, 50.0)
 
     def test_audit_2_arrhenius_pressure_scaling_and_si_units(self) -> None:

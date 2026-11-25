@@ -134,6 +134,11 @@ class GCIResult:
         equal to ``1.0`` identically for exact power-law convergence $\\phi(h) = \\phi_0 + c h^p$.
     safety_factor_fs : float
         Factor of safety $F_s$ [-] (``1.25`` standard for three-grid studies).
+    order_used_p : float
+        Order used for extrapolation and GCI: the apparent order $p$, or the formal
+        order when ``formal_order`` was given and $p$ exceeded it [-].
+    order_limited : bool
+        ``True`` when the apparent order was replaced by the formal order.
     """
 
     h1: float
@@ -162,6 +167,8 @@ class GCIResult:
     asymptotic_ratio: float
     asymptotic_ratio_coeff: float
     safety_factor_fs: float
+    order_used_p: float = float("nan")
+    order_limited: bool = False
 
 
 def _warn_if_sub_asme_refinement(
@@ -483,6 +490,7 @@ def compute_gci(
     max_iter: int = 500,
     min_refinement_ratio: float = ASME_MIN_REFINEMENT_RATIO,
     warn_below_threshold: bool = True,
+    formal_order: float | None = None,
 ) -> GCIResult:
     """Evaluate ASME V&V 20-2009 / Celik et al. (2008) Grid Convergence Index (GCI).
 
@@ -511,10 +519,22 @@ def compute_gci(
         ASME V&V 20-2009 recommended minimum grid refinement ratio.
     warn_below_threshold : bool, default=True
         Emit ``UserWarning`` if $r_{21} < 1.3$ or $r_{32} < 1.3$.
+    formal_order : float | None, optional
+        Formal order of accuracy of the discretization. When the apparent order exceeds
+        it, the formal order is used for the extrapolation and the GCI, which avoids
+        an optimistic (too small) uncertainty from an unrealistically high observed
+        order (Roache, 1998).
 
     Returns
     -------
     GCIResult
+
+    Notes
+    -----
+    A ``DIVERGENT`` triplet ($R \\ge 1$) emits a ``UserWarning``: the returned GCI is
+    then not a valid discretization uncertainty. Oscillatory triplets ($R < 0$) are
+    evaluated with the Celik et al. (2008) sign factor, but their GCI should be read
+    with care since the solutions are not in the asymptotic range.
         Immutable verification report including convergence regime, apparent order $p$,
         Richardson extrapolation $\\phi_{\\text{ext}}^{21}$, fine-grid $\\text{GCI}_{\\text{fine}}^{21}$,
         and asymptotic range ratios.
@@ -611,6 +631,7 @@ def compute_gci(
             asymptotic_ratio=1.0,
             asymptotic_ratio_coeff=1.0,
             safety_factor_fs=float(safety_factor_fs),
+            order_used_p=float("inf"),
         )
 
     if abs(eps21) == 0.0 or abs(eps32) == 0.0:
@@ -633,6 +654,16 @@ def compute_gci(
     else:
         regime = "DIVERGENT"
         regime_desc = "Monotonic Divergence"
+        warnings.warn(
+            f"Divergent grid triplet (R = {conv_ratio_r:.4g} >= 1): the solution moves away "
+            "from a limit under refinement, so the GCI is not a valid discretization "
+            "uncertainty. Refine further or revisit the mesh family.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    if formal_order is not None and (not math.isfinite(formal_order) or formal_order <= 0.0):
+        raise PhysicalBoundsError(f"formal_order must be finite and > 0; got {formal_order}.")
 
     p_order, q_val = _solve_apparent_order_celik(
         abs(eps_ratio_32_21),
@@ -649,8 +680,10 @@ def compute_gci(
             "uniform refinement); Richardson extrapolation denominator (r21^p - 1) is singular."
         )
 
-    r21_pow_p = r21_val**p_order
-    r32_pow_p = r32_val**p_order
+    order_limited = formal_order is not None and p_order > formal_order
+    p_used = float(formal_order) if order_limited and formal_order is not None else p_order
+    r21_pow_p = r21_val**p_used
+    r32_pow_p = r32_val**p_used
     denom_21 = r21_pow_p - 1.0
     denom_32 = r32_pow_p - 1.0
 
@@ -701,4 +734,6 @@ def compute_gci(
         asymptotic_ratio=asymptotic_ratio,
         asymptotic_ratio_coeff=asymptotic_ratio_coeff,
         safety_factor_fs=fs,
+        order_used_p=p_used,
+        order_limited=order_limited,
     )

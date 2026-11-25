@@ -11,8 +11,7 @@ abstract: >-
   and Hohenberg wall heat-transfer models, Heywood single-zone First-Law
   apparent and gross heat release rate (AHRR), sub-degree CA10/CA50/CA90 MFB
   extraction, MAPO and Eng (2002) acoustic Ringing Intensity, ISO 2533 Standard
-  Atmosphere scaling, Hiroyasu-Arai (1990) and Naber-Siebers (1996) / Siebers
-  (1999) high-altitude spray penetration and wall-impingement risk assessment,
+  Atmosphere scaling, Hiroyasu-Arai (1990) and Naber-Siebers (1996) high-altitude spray penetration and wall-impingement risk assessment,
   Wolfer (1938), Assanis (2003), and Hardenberg-Hase (1979) auto-ignition delay,
   dynamic Livengood-Wu (1955) auto-ignition integral with Hermite sub-grid root solving,
   two-stage LTHR/HTHR cool-flame detection, altitude-dependent dead state Second-Law

@@ -496,6 +496,11 @@ def compute_knock_metrics(
     bandpass filtering when Nyquist sampling permits ($f_s > 2 f_{\\text{high}}$),
     or applies Eng's pressure-rise correlation $\\Delta P_{\\max} = \\beta (dP/dt)_{\\max}$
     ($\\beta = 0.05\\,\\text{ms}$) when ``use_prr_correlation=True`` or sampling is coarse.
+
+    Scope: MAPO needs a *local* pressure signal (a transducer or a CFD monitor point).
+    A spatially averaged CFD cylinder pressure, such as the one in ANSYS Forte
+    ``thermo.csv``, averages out the acoustic modes, so its MAPO and bandpass-based
+    ringing intensity are not meaningful.
     """
     if rpm <= 0.0:
         raise PhysicalBoundsError("Engine speed rpm must be > 0.")

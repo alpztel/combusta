@@ -57,7 +57,7 @@ Heat release uses mass-fraction-burned-weighted unburned/burned gas properties w
    - **Heywood (2018) Termodinamiğin 1. Yasası** ile Görünür Net ($dQ_n/d\theta$) ve Brüt ($dQ_{\text{gross}}/d\theta$) Isı Yayılım Hızı, kübik spline antiderivatifleriyle kümülatif enerji, alt-derece hassasiyetli `CA10`, `CA50`, `CA90`, yanma süresi ($\Delta\theta_{10\text{–}90}$), Brüt/Net `IMEP`, `PMEP` ve **MAPO + Eng (2002) Ringing Intensity** ($RI$, `W/m²`) vuruntu analizi.
 5. **ISO 2533 Atmosfer, Yüksek İrtifa Aero-Dizel Sprey Fiziği ve Cidar Islanması Denetimi (`constants.py` & `spray/`):**
    - **ISO 2533** Uluslararası Standart Atmosfer modeliyle `-500 m` ila `20,000 m` (`≈ 65,617 ft`) arasında troposfer + izotermal alt stratosfer $T_{\text{amb}}(z)$, $P_{\text{amb}}(z)$, $\rho_{\text{amb}}(z)$ ve ses hızı $a(z)$ hesabı.
-   - $t = t_b$ kırılma anında tam $C^0$ sürekli **Hiroyasu & Arai (1990)** ve 5 adımlı vektörize Newton–Raphson ile makine hassasiyetinde çözülen **Naber & Siebers (1996) / Siebers (1999)** sprey penetrasyon modelleri.
+   - $t = t_b$ kırılma anında tam $C^0$ sürekli **Hiroyasu & Arai (1990)** ve 5 adımlı vektörize Newton–Raphson ile makine hassasiyetinde çözülen **Naber & Siebers (1996)** sprey penetrasyon modelleri.
    - İrtifa artışıyla düşen gaz yoğunluğunda ($`\rho_g`$) ($`(\rho_{g,1}/\rho_{g,2})^{0.25}`$) aşırı penetrasyon ölçeklemesi, piston çanağı cidar çarpma başlangıç zamanı ($`t_{\mathrm{imp}}`$) tespiti ve asenkron zaman serileri arasında `RMSE`, `MAPE`, bağıl $`L_2`$ ve $`L_\infty`$ doğrulama metrikleri.
 6. **ASME V&V 20-2009 / Celik vd. (2008) 3B Ağ Yakınsama İndeksi ve AMR Koruması (`vv/gci.py`):**
    - 3B hücre sayısı veya ortalama hücre hacminden küpkök temsili ağ boyutu ($`h_1 < h_2 < h_3`$), $r < 1.3$ ASME standart uyarısı, eşit olmayan ağ oranları ($`r_{21} \neq r_{32}`$) için $q(p)$ transandantal sabit nokta / Brent çözücüsü ($\lvert p - g(p)\rvert \le 10^{-11}$), Richardson ekstrapolasyonu ($`\phi_{\mathrm{ext}}^{21}`$), $`GCI_{\mathrm{fine}}^{21}`$ ve ANSYS Forte **Adaptif Ağ İyileştirme (AMR)** kaynaklı salınımlı yakınsamada ($`\epsilon_{32}/\epsilon_{21} < 0`$) `NaN` hatasını önleyen $`s = \mathrm{sgn}(\epsilon_{32}/\epsilon_{21})`$ koruması.
@@ -153,7 +153,7 @@ Heat release uses mass-fraction-burned-weighted unburned/burned gas properties w
   - Vectorized solver across `[-500 m, 20,000 m]` (`≈ 65,617 ft`) covering both the linear-lapse troposphere ($0 \le z \le 11{,}000\ \mathrm{m}$, $L = 6.5\ \mathrm{K/km}$) and isothermal lower stratosphere ($11{,}000 < z \le 20{,}000\ \mathrm{m}$, $T = 216.65\ \mathrm{K}$), outputting $`T_{\mathrm{amb}}(z)`$ [`K`], $`P_{\mathrm{amb}}(z)`$ [`Pa`], $`\rho_{\mathrm{amb}}(z)`$ [`kg/m^3`], and acoustic speed $a(z)$ [`m/s`].
 - **Hiroyasu & Arai (1990) Two-Regime Spray Penetration (`hiroyasu_arai_penetration`)**:
   - Evaluates intact-core breakup time $`t_b`$, breakup length $`L_b`$, gas-density-independent pre-breakup linear velocity ($`t < t_b`$), and post-breakup $`\rho_g^{-0.25} t^{0.5}`$ dispersion ($`t \ge t_b`$) with exact IEEE-754 $C^0$ intersection continuity at $`t = t_b`$.
-- **Naber & Siebers (1996) / Siebers (1999) Momentum Scaling (`naber_siebers_penetration`)**:
+- **Naber & Siebers (1996) Momentum Scaling (`naber_siebers_penetration`)**:
   - Computes momentum length/time/velocity scales ($`x^+, t^+, U_f`$) with orifice contraction/velocity coefficients ($`C_a, C_v`$) and half-cone angle $`\tan(\theta_{\mathrm{spray}}/2)`$, inverting the implicit momentum conservation law to $< 10^{-15}$ dimensionless residual in 5 unrolled vectorized Newton–Raphson updates (`method="exact"`) or via SAE 960034 Eq. 21 (`method="explicit"`).
 - **High-Altitude Wall-Impingement Risk & CFD Error Norms (`evaluate_altitude_spray_risk`, `compute_spray_validation_metrics`)**:
   - Evaluates $`(\rho_{g,\mathrm{SL}} / \rho_{g,\mathrm{alt}})^{0.25}`$ penetration stretch and solves analytically for exact sub-step piston-bowl / cylinder-liner impingement onset time $`t_{\mathrm{imp}}`$ [`s`] when $`S(t) \ge L_{\mathrm{wall}}`$.
@@ -197,7 +197,7 @@ Heat release uses mass-fraction-burned-weighted unburned/burned gas properties w
 - Built directly on `matplotlib.figure.Figure` + `FigureCanvasAgg` without touching global `pyplot` state (zero memory leaks across batch sweeps; 100% compatible with headless Linux clusters and GitHub Actions):
   - `plot_thermo_diagnostics`: 3-row shared crank-angle ($\theta$) panel ($P$ [`MPa`], Net/Gross $dQ/d\theta$ [`J/deg`] with shaded wall heat loss, and `MFB` [`%`] with `CA10`/`CA50`/`CA90` callouts and multi-altitude `ThermoOverlayTrace` support).
   - `plot_pv_log_diagram`: $\log_{10}(P) - \log_{10}(V/V_{\max})$ indicator diagram with automatic linear least-squares regression of compression ($\kappa_{\text{comp}}$) and expansion ($\kappa_{\text{exp}}$) polytropic exponents.
-  - `plot_altitude_spray_comparison`: Multi-altitude spray penetration vs. time [`ms`] overlaying Hiroyasu–Arai, Siebers (1999), discrete ANSYS Forte CFD markers, $t_{\text{imp}}$ callouts, and shaded bowl-wall impingement zone ($S \ge L_{\text{wall}}$).
+  - `plot_altitude_spray_comparison`: Multi-altitude spray penetration vs. time [`ms`] overlaying Hiroyasu–Arai, Naber & Siebers (1996), discrete ANSYS Forte CFD markers, $t_{\text{imp}}$ callouts, and shaded bowl-wall impingement zone ($S \ge L_{\text{wall}}$).
   - `plot_gci_convergence`: ASME V&V 20-2009 three-mesh convergence chart with continuous apparent-order ($p$) Richardson curve to $h/h_1 \to 0$, $\phi_{\text{ext}}^{21}$ asymptote, $\pm GCI_{\mathrm{fine}}^{21}$ / $\pm GCI_{32}$ error bars, and collision-free summary box placement.
 
 ---
@@ -317,7 +317,7 @@ c_{\mathrm{pre}} \left(\frac{2 \Delta P}{\rho_l}\right)^{0.5} t, & t < t_b \\
 \end{cases}
 $$
 
-For **Naber & Siebers (1996) / Siebers (1999)** momentum scaling, dimensionless penetration $\tilde{S} = S / x^+$ as a function of $\tilde{t} = t / t^+$ satisfies the exact implicit relation inverted via vectorized Newton–Raphson iteration:
+For **Naber & Siebers (1996)** momentum scaling, dimensionless penetration $\tilde{S} = S / x^+$ as a function of $\tilde{t} = t / t^+$ satisfies the exact implicit relation inverted via vectorized Newton–Raphson iteration:
 
 $$
 x^+ = \frac{\sqrt{C_a}\, d_o \sqrt{\rho_l / \rho_g}}{a \tan(\theta_{\mathrm{spray}}/2)}, \qquad t^+ = \frac{x^+}{C_v \sqrt{2\Delta P / \rho_l}}, \qquad \tilde{t} = \frac{\tilde{S}}{2} + \frac{\tilde{S}}{4}\sqrt{1 + 16\tilde{S}^2} + \frac{1}{16}\ln\left(4\tilde{S} + \sqrt{1 + 16\tilde{S}^2}\right)
@@ -446,7 +446,7 @@ Every symbol below is re-exported directly from the top-level `combusta` namespa
 | `thermo` | `compute_imep(crank_angle_deg, pressure_pa, volume_m3, ...)` | Gross/Net `IMEP`, `PMEP` [`Pa`], and boundary work [`J`] → `IMEPResult` |
 | `thermo` | `compute_knock_metrics(crank_angle_deg, pressure_pa, temperature_k, rpm, ...)` | Acoustic `MAPO` [`Pa`] & Eng (2002) Ringing Intensity [`W/m^2`] → `KnockMetrics` |
 | `spray` | `hiroyasu_arai_penetration(time_s, ...)` | Continuous ($C^0$) Hiroyasu & Arai (1990) breakup & tip penetration [`m`] → `HiroyasuAraiResult` |
-| `spray` | `naber_siebers_penetration(time_s, ...)` | Newton-exact Naber & Siebers (1996) / Siebers (1999) penetration [`m`] → `NaberSiebersResult` |
+| `spray` | `naber_siebers_penetration(time_s, ...)` | Newton-exact Naber & Siebers (1996) penetration [`m`] → `NaberSiebersResult` |
 | `spray` | `evaluate_altitude_spray_risk(time_s, ...)` | High-altitude $\rho_g$ over-penetration & exact $t_{\text{imp}}$ [`s`] audit → `AltitudeSprayRiskResult` |
 | `spray` | `compute_spray_validation_metrics(cfd_penetration_m, ref_penetration_m, ...)` | Asynchronous `RMSE` [`m`], `MAPE` [`%`], relative $L_2$, and $L_\infty$ [`m`] → `SprayValidationMetrics` |
 | `vv` | `compute_grid_size(mean_cell_volumes_m3=..., cell_counts=..., ...)` | 3D cube-root representative grid spacings ($h_1 < h_2 < h_3$) & $r \ge 1.3$ check → `GridSizeResult` |
@@ -757,7 +757,7 @@ combusta/
 │       │   └── heat_release.py        # Heywood 1st-Law AHRR, CA10/50/90, IMEP & MAPO/Eng RI
 │       ├── spray/
 │       │   ├── __init__.py
-│       │   └── correlations.py        # Hiroyasu-Arai (1990), Siebers (1999), wall risk & CFD norms
+│       │   └── correlations.py        # Hiroyasu-Arai (1990), Naber & Siebers (1996), wall risk & CFD norms
 │       ├── ignition/
 │       │   ├── __init__.py
 │       │   ├── correlations.py        # Wolfer, Assanis & Hardenberg-Hase delay correlations

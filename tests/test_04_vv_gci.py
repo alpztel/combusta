@@ -145,7 +145,8 @@ class TestUnitVVGCI:
 
     def test_monotonic_divergence_and_forte_dynamic_csv_integration(self, tmp_path: Path) -> None:
         """Verify R > 1 flags DIVERGENT and integrate ForteDynamicData cell counts into GCI."""
-        div_res = compute_gci(15.0, 12.0, 10.5, r21=1.5, r32=1.5)
+        with pytest.warns(UserWarning, match="Divergent"):
+            div_res = compute_gci(15.0, 12.0, 10.5, r21=1.5, r32=1.5)
         assert div_res.convergence_ratio_r == pytest.approx(2.0, rel=1.0e-14)
         assert div_res.convergence_regime == "DIVERGENT"
         assert div_res.convergence_description == "Monotonic Divergence"

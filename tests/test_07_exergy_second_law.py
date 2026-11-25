@@ -29,7 +29,7 @@ from combusta.exergy import (
 from combusta.signal.filtering import compute_derivative
 from combusta.thermo.kinematics import SliderCrankGeometry
 from combusta.thermo.nasa_polynomials import DRY_AIR
-from tests.conftest import assert_package_type_checks
+from tests.conftest import assert_package_type_checks, generate_synthetic_rk45_cycle
 
 
 @pytest.mark.unit
@@ -198,56 +198,42 @@ class TestUnitExergySecondLaw:
             conrod_m=0.150,
             compression_ratio=16.0,
         )
-        theta = np.linspace(-180.0, 180.0, 721)
-        kin = geom.evaluate(theta)
-        v = kin.volume_m3
-        dv = kin.dv_dtheta_m3_per_deg
-
-        m_cyl = 5.5e-4
-        r_spec = DRY_AIR.specific_gas_constant
-
-        p_ivc = 1.0e5
-        burn_start = -10.0
-        burn_duration = 50.0
-        fraction = np.clip((theta - burn_start) / burn_duration, 0.0, 1.0)
-        wiebe = 1.0 - np.exp(-5.0 * (fraction ** 3.0))
-
-        p_comp = p_ivc * (v[0] / v) ** 1.35
-        p_comb = p_comp + 2.0e6 * wiebe * (v[np.argmin(np.abs(theta))] / v) ** 0.8
-        t_gas = p_comb * v / (m_cyl * r_spec)
-
+        # First-Law-consistent diabatic cycle (dry air, Wiebe heat release, wall loss)
+        cyc = generate_synthetic_rk45_cycle(geom, q_comb_total_j=1300.0, q_ht_total_j=150.0)
         fuel_mass = 3.5e-5
         lhv = 42.8e6
         phi_fuel = JET_A1_EXERGY_FACTOR
 
-        dq_gross_cum = 1300.0 * wiebe
-        dq_gross_rate = compute_derivative(theta, dq_gross_cum)
-        dq_ht_rate = np.maximum(5.0 * np.exp(-0.5 * ((theta - 15.0) / 25.0) ** 2), 0.0)
+        def budget_for(dq_gross: np.ndarray):
+            rates = compute_exergy_rates(
+                crank_angle_deg=cyc.theta_deg,
+                pressure_pa=cyc.pressure_pa,
+                temperature_k=cyc.temperature_k,
+                volume_m3=cyc.volume_m3,
+                dvolume_dtheta_m3_per_deg=cyc.dv_dtheta_m3_per_deg,
+                gross_heat_release_rate_j_per_deg=dq_gross,
+                wall_heat_loss_rate_j_per_deg=cyc.wall_heat_loss_rate_j_per_deg,
+                dead_state=ds_alt,
+                trapped_mass_kg=cyc.trapped_mass_kg,
+                wall_temperature_k=t_wall,
+                phi_factor=phi_fuel,
+                gas_mixture=DRY_AIR,
+            )
+            return compute_exergy_cycle_budget(
+                rates_result=rates, fuel_mass_kg=fuel_mass, lhv_j_per_kg=lhv, phi_factor=phi_fuel
+            )
 
-        rates = compute_exergy_rates(
-            crank_angle_deg=theta,
-            pressure_pa=p_comb,
-            temperature_k=t_gas,
-            volume_m3=v,
-            dvolume_dtheta_m3_per_deg=dv,
-            gross_heat_release_rate_j_per_deg=dq_gross_rate,
-            wall_heat_loss_rate_j_per_deg=dq_ht_rate,
-            dead_state=ds_alt,
-            trapped_mass_kg=m_cyl,
-            wall_temperature_k=t_wall,
-            phi_factor=phi_fuel,
-            gas_mixture=DRY_AIR,
-        )
+        budget = budget_for(cyc.gross_heat_release_rate_j_per_deg)
+        # Consistent inputs: independent destruction closes the balance to discretization error
+        assert budget.closure_error_j / budget.e_released_j < 1.0e-5
+        assert abs(budget.budget_closure_pct - 100.0) < 1.0e-3
+        # conftest Wiebe 1 - exp(-5 u^3) reaches 1 - e^-5 of q_comb_total at end of burn
+        assert budget.e_released_j == pytest.approx(phi_fuel * 1300.0 * (1.0 - np.exp(-5.0)), rel=1e-3)
 
-        budget = compute_exergy_cycle_budget(
-            rates_result=rates,
-            fuel_mass_kg=fuel_mass,
-            lhv_j_per_kg=lhv,
-            phi_factor=phi_fuel,
-        )
+        # Inconsistent inputs (heat release overstated by 20 %) are detected, not hidden
+        wrong = budget_for(1.2 * cyc.gross_heat_release_rate_j_per_deg)
+        assert wrong.closure_error_j / wrong.e_released_j > 1.0e-2
 
-        assert abs(budget.budget_closure_pct - 100.0) < 1.0e-9
-        assert budget.closure_error_j < 1.0e-9
         assert abs((budget.eta_first_law / budget.eta_second_law) - phi_fuel) < 1.0e-9
 
 
@@ -448,7 +434,7 @@ class TestStrictAuditExergySecondLaw:
         )
 
         assert diff_gouy < 1.0e-6
-        assert budget.closure_error_j < 1.0e-9
+        assert budget.closure_error_j / budget.e_released_j < 1.0e-6
 
     def test_05_audit_altitude_evo_exergy_recovery_potential(self) -> None:
         """DENETİM 5: İrtifa etkisi: Deniz seviyesi vs. 30,000 ft EVO ekserji geri kazanım potansiyeli."""
