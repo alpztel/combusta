@@ -32,6 +32,7 @@ from combusta import (
     product_moles,
     reactant_moles,
 )
+from combusta.synthetic import _ScalarNasa, _ScalarSliderCrank
 from combusta.thermo.nasa_polynomials import SPECIES_DB
 
 R_U = 8.314462618
@@ -170,13 +171,17 @@ class TestVariableCompositionHeatRelease:
                 return 0.0
             return q_total * 5.0 * 3.0 / duration * u**2 * math.exp(-5.0 * u**3) / (1.0 - math.exp(-5.0))
 
+        # Plain-float forward model (same blend as blend_burned_unburned); the inverse uses
+        # the vectorized implementation.
+        crank, gas_u, gas_b = _ScalarSliderCrank(geom), _ScalarNasa(unburned), _ScalarNasa(burned)
+
         def rhs(th: float, y: np.ndarray) -> list[float]:
-            k = geom.evaluate(np.array([th]))
-            v, dv = float(k.volume_m3[0]), float(k.dv_dtheta_m3_per_deg[0])
+            v, dv = crank(th)
             xb = x_b_of(th)
             r_mix = (1 - xb) * unburned.specific_gas_constant + xb * burned.specific_gas_constant
             t = float(y[0]) * v / (m * r_mix)
-            g = float(blend_burned_unburned(np.array([t]), np.array([xb]), unburned, burned).gamma[0])
+            cp = (1 - xb) * gas_u.cp(t) + xb * gas_b.cp(t)
+            g = cp / (cp - r_mix)
             return [((g - 1.0) * dq_of(th) - g * float(y[0]) * dv) / v]
 
         sol = solve_ivp(rhs, (theta[0], theta[-1]), [1.0e5], t_eval=theta, rtol=1e-11, atol=1e-6, max_step=0.05)

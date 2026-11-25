@@ -42,6 +42,8 @@ From exported data to a comparison report, and the analyses needed to compare an
 - `tests/test_12_data_intake.py`.
 
 ### Changed
+- Manufactured cycles (`manufactured_cycle`, `manufactured_pre_chamber_cycle`) evaluate their right-hand side with plain-float NASA polynomials and slider-crank kinematics instead of the array APIs; the same equations, about 10 and 35 times faster. The test suite uses the same helpers in its own forward models and runs pyrefly once per session instead of once per package; the local suite time drops from about 72 s to 41 s.
+- CI no longer runs the altitude demo as a separate step (the test suite already runs it) and prints the 15 slowest tests.
 - CI runs on pull requests and on pushes to `main` only (previously on every push as well, which ran the suite twice per pull request), cancels superseded pull-request runs, and can be started manually.
 
 ### Fixed

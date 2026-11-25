@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import functools
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +15,7 @@ from scipy.integrate import solve_ivp
 from scipy.interpolate import CubicSpline
 
 from combusta.signal.filtering import compute_derivative
+from combusta.synthetic import _ScalarNasa
 from combusta.thermo.kinematics import SliderCrankGeometry
 from combusta.thermo.nasa_polynomials import DRY_AIR
 
@@ -129,9 +131,11 @@ def generate_synthetic_rk45_cycle(
     dq_c_spline = CubicSpline(theta, dq_comb_rate)
     dq_h_spline = CubicSpline(theta, dq_ht_rate)
 
+    air = _ScalarNasa(DRY_AIR)  # plain-float c_v(T); the inverse analysis uses the vectorized API
+
     def cycle_rhs(th: float, state: np.ndarray) -> list[float]:
         t_curr = float(state[0])
-        cv_curr = float(np.squeeze(DRY_AIR.cv(t_curr)))
+        cv_curr = air.cv(t_curr)
         vol = float(v_spline(th))
         dvol = float(dv_spline(th))
         p_curr = trapped_mass_kg * r_spec * t_curr / vol
@@ -171,11 +175,19 @@ def assert_package_type_checks(subpackage: str | None = None) -> None:
     target_dir = pkg_root / subpackage if subpackage else pkg_root
     assert target_dir.exists(), f"Directory {target_dir} does not exist!"
 
-    # Verify static typing via pyrefly
+    returncode, output = _pyrefly_project_check(project_root)
+    assert returncode == 0, f"pyrefly type check failed:\n{output}"
+
+
+@functools.cache
+def _pyrefly_project_check(project_root: Path) -> tuple[int, str]:
+    """Run ``pyrefly check`` over the whole project once per test session.
+
+    pyrefly always checks the configured project, so the per-package audits share one run.
+    """
     pyrefly_path = shutil.which("pyrefly")
     if pyrefly_path is None:
         venv_pyrefly = project_root / ".venv" / "Scripts" / "pyrefly.exe"
         pyrefly_path = str(venv_pyrefly) if venv_pyrefly.exists() else "pyrefly"
-
     proc = subprocess.run([pyrefly_path, "check"], capture_output=True, text=True, check=False)
-    assert proc.returncode == 0, f"pyrefly type check failed:\n{proc.stdout}\n{proc.stderr}"
+    return proc.returncode, f"{proc.stdout}\n{proc.stderr}"

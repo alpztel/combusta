@@ -47,8 +47,7 @@ jobs:
           PURELIB=$(python -c "import sysconfig; print(sysconfig.get_path('purelib'))")
           pyrefly check --site-package-path "$PURELIB"
 
+      # The test suite also runs examples/altitude_sweep_demo.py end to end
+      # (test_05_plotting_and_pipeline); --durations lists the slowest tests in the log.
       - name: Execute analytical thermodynamics, spray scaling & ASME GCI test suite
-        run: pytest -v
-
-      - name: Smoke-test end-to-end Aero-Diesel altitude sweep & 300-DPI figure export
-        run: python examples/altitude_sweep_demo.py
+        run: pytest -v --durations=15

@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 from scipy.integrate import solve_ivp
 
+from combusta.synthetic import _ScalarNasa, _ScalarSliderCrank
+
 from combusta import (
     DRY_AIR,
     ISO_OCTANE,
@@ -68,11 +70,12 @@ def _synthetic_case(
     v_ivc = float(kin.volume_m3[0])
     mass = P_IVC * v_ivc / (gas.specific_gas_constant * T_IVC)
 
+    crank, scalar_gas = _ScalarSliderCrank(GEOM), _ScalarNasa(gas)  # plain-float forward model
+
     def rhs(th: float, y: np.ndarray) -> list[float]:
-        k = GEOM.evaluate(np.array([th]))
-        v, dv = float(k.volume_m3[0]), float(k.dv_dtheta_m3_per_deg[0])
+        v, dv = crank(th)
         t = float(y[0]) * v / (mass * gas.specific_gas_constant)
-        g = float(gas.gamma(np.array([t]))[0])
+        g = scalar_gas.gamma(t)
         return [((g - 1.0) * _wiebe_rate(th, start, duration, q_total) - g * float(y[0]) * dv) / v]
 
     sol = solve_ivp(rhs, (THETA[0], THETA[-1]), [P_IVC], t_eval=THETA, rtol=1e-11, atol=1e-6, max_step=0.05)

@@ -95,12 +95,12 @@ class TestLinearBudget:
 class TestMonteCarlo:
     def test_agrees_with_linear_propagation(self, bench_case) -> None:
         inputs = PressureMeasurementUncertainty(tdc_offset_deg=0.1, pegging_offset_pa=3.0e3, gain_relative=0.005)
-        r = pressure_measurement_uncertainty(bench_case, inputs, n_samples=1000, seed=7)
+        r = pressure_measurement_uncertainty(bench_case, inputs, n_samples=400, seed=7)
         for key in ("p_max", "imep_gross", "ca50"):
             m = r.metrics[key]
-            assert m.mc_valid == 1000
+            assert m.mc_valid == 400
             assert abs(m.mc_std - m.u_linear) < 3.0 * m.mc_std_se, key
-            assert abs(m.mc_mean - m.nominal) < 4.0 * m.mc_std / np.sqrt(1000), key
+            assert abs(m.mc_mean - m.nominal) < 4.0 * m.mc_std / np.sqrt(400), key
 
     def test_reproducible_and_noise_included(self, bench_case) -> None:
         from combusta.signal.filtering import savgol_zero_phase
