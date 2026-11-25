@@ -4,15 +4,23 @@ Converts spatially averaged 3D CFD monitor files (``thermo.csv``, ``spray.csv``,
 ``dynamic.csv``) into strictly typed SI data containers prior to any numerical
 differentiation or thermodynamic integration, eliminating $10^6$-order $P\\,dV$
 scaling errors (Heywood, 2018; NIST SP 811, Thompson & Taylor, 2008).
+
+Columns are found through lists of common header aliases. Because export headers
+differ between solver versions and user configurations, every parser also accepts an
+explicit ``columns`` mapping from a canonical field name to a :class:`ColumnSpec`
+(header name and, if the file carries none, its unit). :func:`inspect_columns` lists
+the headers of a file and the field each one is matched to, which is the first step
+when a new export format arrives.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
 import re
-from typing import IO, Final
+from typing import IO, Final, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,6 +85,97 @@ _CELL_VOL_ALIASES: Final[tuple[str, ...]] = (
     "mean_cell_volume", "avg_cell_volume", "cell_volume",
 )
 _MIN_SIZE_ALIASES: Final[tuple[str, ...]] = ("min_cell_size", "min_grid_size")
+
+
+@dataclass(frozen=True, slots=True)
+class ColumnSpec:
+    """Explicit location of one canonical field in a CSV export.
+
+    Parameters
+    ----------
+    column : str
+        Header name as written in the file. Matching ignores case and treats runs of
+        non-alphanumeric characters as one underscore, so ``"Cyl. Pressure"`` and
+        ``"cyl_pressure"`` are equivalent.
+    unit : str | None, default=None
+        Unit token (for example ``"MPa"``) that overrides the unit in the header. Required
+        when the file has no unit for this column.
+    """
+
+    column: str
+    unit: str | None = None
+
+    def __post_init__(self) -> None:
+        if not _normalize_name(self.column):
+            raise ValueError("ColumnSpec.column must contain at least one letter or digit.")
+
+
+ColumnMap: TypeAlias = Mapping[str, ColumnSpec | str]
+"""Canonical field name -> :class:`ColumnSpec` or bare header name."""
+
+THERMO_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
+    "crank_angle": _CA_ALIASES,
+    "pressure": _PRESSURE_ALIASES,
+    "volume": _VOLUME_ALIASES,
+    "temperature": _TEMP_ALIASES,
+    "time": _TIME_ALIASES,
+    "trapped_mass": _MASS_ALIASES,
+    "wall_heat_loss": _WALL_HEAT_LOSS_ALIASES,
+}
+"""Canonical fields of ``thermo.csv`` and the header aliases searched for each."""
+
+SPRAY_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
+    "liquid_penetration": _LIQ_PEN_ALIASES,
+    "vapor_penetration": _VAP_PEN_ALIASES,
+    "smd": _SMD_ALIASES,
+    "time": _TIME_ALIASES,
+    "crank_angle": _CA_ALIASES,
+    "injected_mass": _INJ_MASS_ALIASES,
+}
+"""Canonical fields of ``spray.csv`` and the header aliases searched for each."""
+
+DYNAMIC_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
+    "cell_count": _CELL_COUNT_ALIASES,
+    "crank_angle": _CA_ALIASES,
+    "time": _TIME_ALIASES,
+    "mean_cell_volume": _CELL_VOL_ALIASES,
+    "min_cell_size": _MIN_SIZE_ALIASES,
+}
+"""Canonical fields of ``dynamic.csv`` and the header aliases searched for each."""
+
+
+@dataclass(frozen=True, slots=True)
+class ColumnInfo:
+    """One column of a CSV export as seen by the parsers.
+
+    Attributes
+    ----------
+    header : str
+        Header text as written in the file.
+    name : str
+        Normalized name used for matching.
+    unit : str
+        Unit token from the header or the unit row (empty if none).
+    matched_fields : tuple[str, ...]
+        Canonical fields whose alias list contains ``name`` (empty if none).
+    """
+
+    header: str
+    name: str
+    unit: str
+    matched_fields: tuple[str, ...]
+
+
+def _check_column_map(columns: ColumnMap | None, allowed: Mapping[str, tuple[str, ...]]) -> dict[str, ColumnSpec]:
+    if columns is None:
+        return {}
+    unknown = sorted(set(columns) - set(allowed))
+    if unknown:
+        raise ValueError(f"Unknown field(s) {unknown} in column map; expected a subset of {sorted(allowed)}.")
+    return {
+        field: spec if isinstance(spec, ColumnSpec) else ColumnSpec(column=spec)
+        for field, spec in columns.items()
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +311,13 @@ def _read_raw_columns(
     source: Path | str | IO[str],
 ) -> dict[str, tuple[FloatArray, str]]:
     """Parse 1-row or 2-row ANSYS Forte CSV headers and extract float64 columns."""
+    return _read_table(source)[0]
+
+
+def _read_table(
+    source: Path | str | IO[str],
+) -> tuple[dict[str, tuple[FloatArray, str]], list[str]]:
+    """Return the normalized columns and the raw header tokens of a CSV export."""
     if isinstance(source, (str, Path)):
         text = Path(source).read_text(encoding="utf-8-sig")
     else:
@@ -266,9 +372,74 @@ def _read_raw_columns(
         arr: FloatArray = df.iloc[:, idx].to_numpy(dtype=np.float64, copy=True)
         if not np.all(np.isfinite(arr)):
             raise ForteParseError(f"Column '{col_name}' contains NaN or infinite values.")
+        if col_name in columns:
+            # Repeated headers (e.g. one "Pressure" per region) get a numeric suffix in
+            # file order, "pressure", "pressure_2", ..., so no column is silently dropped.
+            suffix = 2
+            while f"{col_name}_{suffix}" in columns:
+                suffix += 1
+            col_name = f"{col_name}_{suffix}"
         columns[col_name] = (arr, unit_token)
 
-    return columns
+    return columns, header_tokens
+
+
+def inspect_columns(
+    source: Path | str | IO[str],
+    fields: Mapping[str, tuple[str, ...]] | None = None,
+) -> tuple[ColumnInfo, ...]:
+    """List the columns of a CSV export and the canonical fields they match.
+
+    Parameters
+    ----------
+    source : Path | str | IO[str]
+        Filesystem path or text stream of the export.
+    fields : Mapping[str, tuple[str, ...]] | None
+        Field alias table to match against; defaults to the union of
+        :data:`THERMO_FIELDS`, :data:`SPRAY_FIELDS`, and :data:`DYNAMIC_FIELDS`.
+
+    Returns
+    -------
+    tuple[ColumnInfo, ...]
+        One entry per column, in file order.
+    """
+    tables = (THERMO_FIELDS, SPRAY_FIELDS, DYNAMIC_FIELDS) if fields is None else (fields,)
+    columns, headers = _read_table(source)
+    infos = []
+    for raw_hdr, (name, (_, unit)) in zip(headers, columns.items()):
+        matched = sorted({f for table in tables for f, aliases in table.items() if name in aliases})
+        infos.append(ColumnInfo(header=raw_hdr, name=name, unit=unit, matched_fields=tuple(matched)))
+    return tuple(infos)
+
+
+def _locate(
+    columns: dict[str, tuple[FloatArray, str]],
+    aliases: tuple[str, ...],
+    canonical_name: str,
+    override: ColumnSpec | None,
+    required: bool,
+) -> tuple[str, FloatArray, str] | None:
+    """Find a column by explicit spec or alias; return (name, values, unit token)."""
+    if override is not None:
+        name = _normalize_name(override.column)
+        if name not in columns:
+            raise ForteParseError(
+                f"Column '{override.column}' mapped to '{canonical_name}' not found. "
+                f"Available columns: {sorted(columns)}."
+            )
+        raw_arr, unit = columns[name]
+        return name, raw_arr, _normalize_unit(override.unit) if override.unit else unit
+    for alias in aliases:
+        if alias in columns:
+            raw_arr, unit = columns[alias]
+            return alias, raw_arr, unit
+    if required:
+        raise ForteParseError(
+            f"Required '{canonical_name}' column not found. Checked aliases: {aliases}. "
+            f"Available columns: {sorted(columns)}. Map it explicitly with "
+            f"columns={{'{canonical_name}': ColumnSpec('<header>', '<unit>')}}."
+        )
+    return None
 
 
 def _resolve_scaled(
@@ -278,46 +449,44 @@ def _resolve_scaled(
     canonical_name: str,
     *,
     required: bool = True,
+    override: ColumnSpec | None = None,
 ) -> tuple[FloatArray | None, str | None]:
-    for alias in aliases:
-        if alias in columns:
-            raw_arr, unit = columns[alias]
-            if not unit or unit not in scale_map:
-                raise UnitDetectionError(
-                    f"Column '{alias}' ({canonical_name}) has missing or invalid unit "
-                    f"'{unit}'. Expected one of {sorted(scale_map.keys())}."
-                )
-            return raw_arr * scale_map[unit], unit
-    if required:
-        raise ForteParseError(
-            f"Required '{canonical_name}' column not found. Checked aliases: {aliases}."
+    found = _locate(columns, aliases, canonical_name, override, required)
+    if found is None:
+        return None, None
+    alias, raw_arr, unit = found
+    if not unit or unit not in scale_map:
+        raise UnitDetectionError(
+            f"Column '{alias}' ({canonical_name}) has missing or invalid unit "
+            f"'{unit}'. Expected one of {sorted(scale_map.keys())}."
         )
-    return None, None
+    return raw_arr * scale_map[unit], unit
 
 
 def _resolve_temperature(
     columns: dict[str, tuple[FloatArray, str]],
     *,
     required: bool = False,
+    override: ColumnSpec | None = None,
 ) -> tuple[FloatArray | None, str | None]:
-    for alias in _TEMP_ALIASES:
-        if alias in columns:
-            raw_arr, unit = columns[alias]
-            if not unit or unit not in TEMP_TO_K:
-                raise UnitDetectionError(
-                    f"Temperature column '{alias}' has missing or invalid unit '{unit}'. "
-                    f"Expected one of {sorted(TEMP_TO_K.keys())}."
-                )
-            scale, offset = TEMP_TO_K[unit]
-            return raw_arr * scale + offset, unit
-    if required:
-        raise ForteParseError(
-            f"Required 'temperature' column not found. Checked aliases: {_TEMP_ALIASES}."
+    found = _locate(columns, _TEMP_ALIASES, "temperature", override, required)
+    if found is None:
+        return None, None
+    alias, raw_arr, unit = found
+    if not unit or unit not in TEMP_TO_K:
+        raise UnitDetectionError(
+            f"Temperature column '{alias}' has missing or invalid unit '{unit}'. "
+            f"Expected one of {sorted(TEMP_TO_K.keys())}."
         )
-    return None, None
+    scale, offset = TEMP_TO_K[unit]
+    return raw_arr * scale + offset, unit
 
 
-def parse_thermo_csv(source: Path | str | IO[str]) -> ForteThermoData:
+def parse_thermo_csv(
+    source: Path | str | IO[str],
+    *,
+    columns: ColumnMap | None = None,
+) -> ForteThermoData:
     """Parse ANSYS Forte ``thermo.csv`` and convert state variables to strict SI.
 
     Enforces pre-differentiation conversion $P \\to \\text{Pa}$, $V \\to \\text{m}^3$,
@@ -328,6 +497,9 @@ def parse_thermo_csv(source: Path | str | IO[str]) -> ForteThermoData:
     ----------
     source : Path | str | IO[str]
         Filesystem path or text stream of an ANSYS Forte ``thermo.csv`` export.
+    columns : ColumnMap | None, optional
+        Explicit header (and unit) per canonical field of :data:`THERMO_FIELDS`;
+        unmapped fields are searched by alias.
 
     Returns
     -------
@@ -343,20 +515,29 @@ def parse_thermo_csv(source: Path | str | IO[str]) -> ForteThermoData:
     PhysicalBoundsError
         If converted $P \\le 0\\,\\text{Pa}$, $V \\le 0\\,\\text{m}^3$, or $T \\le 0\\,\\text{K}$.
     """
-    columns = _read_raw_columns(source)
+    spec = _check_column_map(columns, THERMO_FIELDS)
+    data = _read_raw_columns(source)
 
-    ca_deg, ca_unit = _resolve_scaled(columns, _CA_ALIASES, ANGLE_TO_DEG, "crank_angle")
-    pres_pa, p_unit = _resolve_scaled(columns, _PRESSURE_ALIASES, PRESSURE_TO_PA, "pressure")
-    vol_m3, v_unit = _resolve_scaled(columns, _VOLUME_ALIASES, VOLUME_TO_M3, "volume")
-    temp_k, t_unit = _resolve_temperature(columns, required=False)
+    ca_deg, ca_unit = _resolve_scaled(
+        data, _CA_ALIASES, ANGLE_TO_DEG, "crank_angle", override=spec.get("crank_angle")
+    )
+    pres_pa, p_unit = _resolve_scaled(
+        data, _PRESSURE_ALIASES, PRESSURE_TO_PA, "pressure", override=spec.get("pressure")
+    )
+    vol_m3, v_unit = _resolve_scaled(
+        data, _VOLUME_ALIASES, VOLUME_TO_M3, "volume", override=spec.get("volume")
+    )
+    temp_k, t_unit = _resolve_temperature(data, required=False, override=spec.get("temperature"))
     time_s, time_unit = _resolve_scaled(
-        columns, _TIME_ALIASES, TIME_TO_S, "time", required=False
+        data, _TIME_ALIASES, TIME_TO_S, "time", required=False, override=spec.get("time")
     )
     mass_kg, m_unit = _resolve_scaled(
-        columns, _MASS_ALIASES, MASS_TO_KG, "trapped_mass", required=False
+        data, _MASS_ALIASES, MASS_TO_KG, "trapped_mass", required=False,
+        override=spec.get("trapped_mass"),
     )
     wall_ht, ht_unit = _resolve_scaled(
-        columns, _WALL_HEAT_LOSS_ALIASES, HEAT_RATE_TO_J_PER_DEG, "wall_heat_loss", required=False
+        data, _WALL_HEAT_LOSS_ALIASES, HEAT_RATE_TO_J_PER_DEG, "wall_heat_loss",
+        required=False, override=spec.get("wall_heat_loss"),
     )
 
     assert ca_deg is not None and pres_pa is not None and vol_m3 is not None
@@ -402,6 +583,7 @@ def parse_spray_csv(
     source: Path | str | IO[str],
     *,
     rpm: float | None = None,
+    columns: ColumnMap | None = None,
 ) -> ForteSprayData:
     """Parse ANSYS Forte ``spray.csv`` and convert penetration/time arrays to SI.
 
@@ -417,31 +599,38 @@ def parse_spray_csv(
     rpm : float | None, optional
         Engine speed $N$ [rev/min] used to convert crank angle to seconds [s]
         only when an explicit ``Time`` column is absent.
+    columns : ColumnMap | None, optional
+        Explicit header (and unit) per canonical field of :data:`SPRAY_FIELDS`.
 
     Returns
     -------
     ForteSprayData
         Frozen SI-normalized spray evolution dataset (s, m, kg, deg/rad).
     """
-    columns = _read_raw_columns(source)
+    spec = _check_column_map(columns, SPRAY_FIELDS)
+    data = _read_raw_columns(source)
 
     liq_m, liq_unit = _resolve_scaled(
-        columns, _LIQ_PEN_ALIASES, LENGTH_TO_M, "liquid_penetration"
+        data, _LIQ_PEN_ALIASES, LENGTH_TO_M, "liquid_penetration",
+        override=spec.get("liquid_penetration"),
     )
     vap_m, vap_unit = _resolve_scaled(
-        columns, _VAP_PEN_ALIASES, LENGTH_TO_M, "vapor_penetration", required=False
+        data, _VAP_PEN_ALIASES, LENGTH_TO_M, "vapor_penetration", required=False,
+        override=spec.get("vapor_penetration"),
     )
     smd_m, smd_unit = _resolve_scaled(
-        columns, _SMD_ALIASES, LENGTH_TO_M, "smd", required=False
+        data, _SMD_ALIASES, LENGTH_TO_M, "smd", required=False, override=spec.get("smd")
     )
     time_s, time_unit = _resolve_scaled(
-        columns, _TIME_ALIASES, TIME_TO_S, "time", required=False
+        data, _TIME_ALIASES, TIME_TO_S, "time", required=False, override=spec.get("time")
     )
     ca_deg, ca_unit = _resolve_scaled(
-        columns, _CA_ALIASES, ANGLE_TO_DEG, "crank_angle", required=False
+        data, _CA_ALIASES, ANGLE_TO_DEG, "crank_angle", required=False,
+        override=spec.get("crank_angle"),
     )
     inj_kg, inj_unit = _resolve_scaled(
-        columns, _INJ_MASS_ALIASES, MASS_TO_KG, "injected_mass", required=False
+        data, _INJ_MASS_ALIASES, MASS_TO_KG, "injected_mass", required=False,
+        override=spec.get("injected_mass"),
     )
 
     assert liq_m is not None and liq_unit is not None
@@ -488,7 +677,11 @@ def parse_spray_csv(
     )
 
 
-def parse_dynamic_csv(source: Path | str | IO[str]) -> ForteDynamicData:
+def parse_dynamic_csv(
+    source: Path | str | IO[str],
+    *,
+    columns: ColumnMap | None = None,
+) -> ForteDynamicData:
     """Parse ANSYS Forte ``dynamic.csv`` AMR / mesh statistics into SI units.
 
     Extracts active computational cell count $N_i$ and optional mean cell volume
@@ -500,45 +693,42 @@ def parse_dynamic_csv(source: Path | str | IO[str]) -> ForteDynamicData:
     ----------
     source : Path | str | IO[str]
         Filesystem path or text stream of an ANSYS Forte ``dynamic.csv`` export.
+    columns : ColumnMap | None, optional
+        Explicit header (and unit) per canonical field of :data:`DYNAMIC_FIELDS`.
 
     Returns
     -------
     ForteDynamicData
         Frozen SI-normalized dynamic mesh history.
     """
-    columns = _read_raw_columns(source)
+    spec = _check_column_map(columns, DYNAMIC_FIELDS)
+    data = _read_raw_columns(source)
 
-    cell_count: FloatArray | None = None
-    cell_unit = "count"
-    for alias in _CELL_COUNT_ALIASES:
-        if alias in columns:
-            raw_arr, raw_u = columns[alias]
-            if raw_u not in ("", "-", "count", "cells", "none"):
-                raise UnitDetectionError(
-                    f"Cell count column '{alias}' must be dimensionless, got '{raw_u}'."
-                )
-            cell_count = raw_arr
-            cell_unit = raw_u or "dimensionless"
-            break
-
-    if cell_count is None:
-        raise ForteParseError(
-            f"Required 'cell_count' column not found. Checked aliases: {_CELL_COUNT_ALIASES}."
+    found = _locate(data, _CELL_COUNT_ALIASES, "cell_count", spec.get("cell_count"), True)
+    assert found is not None
+    alias, cell_count, raw_u = found
+    if raw_u not in ("", "-", "count", "cells", "none"):
+        raise UnitDetectionError(
+            f"Cell count column '{alias}' must be dimensionless, got '{raw_u}'."
         )
+    cell_unit = raw_u or "dimensionless"
     if np.any(cell_count <= 0.0):
         raise PhysicalBoundsError("Computational cell count must be strictly positive (> 0).")
 
     ca_deg, ca_unit = _resolve_scaled(
-        columns, _CA_ALIASES, ANGLE_TO_DEG, "crank_angle", required=False
+        data, _CA_ALIASES, ANGLE_TO_DEG, "crank_angle", required=False,
+        override=spec.get("crank_angle"),
     )
     time_s, time_unit = _resolve_scaled(
-        columns, _TIME_ALIASES, TIME_TO_S, "time", required=False
+        data, _TIME_ALIASES, TIME_TO_S, "time", required=False, override=spec.get("time")
     )
     mean_vol_m3, vol_unit = _resolve_scaled(
-        columns, _CELL_VOL_ALIASES, VOLUME_TO_M3, "mean_cell_volume", required=False
+        data, _CELL_VOL_ALIASES, VOLUME_TO_M3, "mean_cell_volume", required=False,
+        override=spec.get("mean_cell_volume"),
     )
     min_size_m, size_unit = _resolve_scaled(
-        columns, _MIN_SIZE_ALIASES, LENGTH_TO_M, "min_cell_size", required=False
+        data, _MIN_SIZE_ALIASES, LENGTH_TO_M, "min_cell_size", required=False,
+        override=spec.get("min_cell_size"),
     )
 
     if mean_vol_m3 is not None and np.any(mean_vol_m3 <= 0.0):

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from combusta.plotting.publication_plots import (
     AltitudeSprayPlotCase,
+    CaseOverlayTrace,
     ThermoOverlayTrace,
     plot_altitude_spray_comparison,
+    plot_case_overlay,
     plot_gci_convergence,
     plot_pv_log_diagram,
     plot_thermo_diagnostics,
@@ -13,8 +15,10 @@ from combusta.plotting.publication_plots import (
 
 __all__ = [
     "AltitudeSprayPlotCase",
+    "CaseOverlayTrace",
     "ThermoOverlayTrace",
     "plot_altitude_spray_comparison",
+    "plot_case_overlay",
     "plot_gci_convergence",
     "plot_pv_log_diagram",
     "plot_thermo_diagnostics",

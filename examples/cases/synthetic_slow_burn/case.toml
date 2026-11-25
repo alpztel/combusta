@@ -1,0 +1,31 @@
+name = "synthetic_slow_burn"
+source = "synthetic"
+
+[geometry]
+bore_m = 0.086
+stroke_m = 0.086
+conrod_m = 0.145
+compression_ratio = 12.0
+
+[operating_point]
+rpm = 2000.0
+fuel = "hydrogen"
+lambda_air = 2.0
+fuel_mass_per_cycle_kg = 6.9342570496312735e-06
+trapped_mass_kg = 0.0004826131008675966
+intake_pressure_pa = 100000.0
+intake_temperature_k = 330.0
+
+[trace]
+file = "thermo.csv"
+format = "forte_thermo"
+wall_heat_loss_sign = -1.0
+
+[uncertainty]
+p_max = 30000.0
+ca50 = 0.3
+imep_gross = 2000.0
+
+[metadata]
+"generator" = "combusta.synthetic.manufactured_cycle"
+"wiebe" = "start=-15 deg, duration=45 deg, m=2, a=6.908"

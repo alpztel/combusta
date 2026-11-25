@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from combusta.case import CaseSource, CycleTrace, EngineCase, OperatingPoint
+from combusta.casefile import FUEL_ALIASES, LoadedCase, load_case
 from combusta.compare import (
     METRIC_SPECS,
     CaseComparison,
@@ -33,6 +34,7 @@ from combusta.emissions import (
     specific_emission,
 )
 from combusta.exceptions import (
+    CaseFileError,
     CombustaError,
     ForteParseError,
     PhysicalBoundsError,
@@ -75,23 +77,31 @@ from combusta.ignition import (
     solve_livengood_wu,
 )
 from combusta.io import (
+    ColumnInfo,
+    ColumnSpec,
     ECNSprayDataset,
     ForteDynamicData,
     ForteSprayData,
     ForteThermoData,
+    TraceTableData,
+    inspect_columns,
     load_ecn_spray_data,
     parse_dynamic_csv,
     parse_spray_csv,
     parse_thermo_csv,
+    parse_trace_csv,
 )
 from combusta.plotting import (
     AltitudeSprayPlotCase,
+    CaseOverlayTrace,
     ThermoOverlayTrace,
     plot_altitude_spray_comparison,
+    plot_case_overlay,
     plot_gci_convergence,
     plot_pv_log_diagram,
     plot_thermo_diagnostics,
 )
+from combusta.report import ComparisonReport, write_comparison_report
 from combusta.signal.filtering import (
     butterworth_zero_phase,
     compute_derivative,
@@ -107,6 +117,7 @@ from combusta.spray import (
     hiroyasu_arai_penetration,
     naber_siebers_penetration,
 )
+from combusta.synthetic import ManufacturedCycle, manufactured_cycle, write_case_directory
 from combusta.thermo import (
     AIR_MOLE_FRACTIONS,
     DIESEL_SURROGATE,
@@ -174,6 +185,22 @@ from combusta.vv import (
 __version__ = "0.3.0"
 
 __all__ = [
+    "FUEL_ALIASES",
+    "CaseFileError",
+    "CaseOverlayTrace",
+    "ColumnInfo",
+    "ColumnSpec",
+    "ComparisonReport",
+    "LoadedCase",
+    "ManufacturedCycle",
+    "TraceTableData",
+    "inspect_columns",
+    "load_case",
+    "manufactured_cycle",
+    "parse_trace_csv",
+    "plot_case_overlay",
+    "write_case_directory",
+    "write_comparison_report",
     "SPECIES_MOLAR_MASS",
     "UNBURNED_SPECIES_LHV",
     "ExhaustComposition",

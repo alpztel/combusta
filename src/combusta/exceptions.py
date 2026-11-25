@@ -26,3 +26,6 @@ class PhysicalBoundsError(CombustaError):
 class TDCPhaseError(CombustaError):
     """Raised when motored peak pressure violates thermodynamic TDC phasing tolerance."""
 
+
+class CaseFileError(CombustaError, ValueError):
+    """Raised when a ``case.toml`` file is missing, malformed, or inconsistent."""
