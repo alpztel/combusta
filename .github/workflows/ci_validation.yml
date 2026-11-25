@@ -1,10 +1,16 @@
 name: Physics & ASME V&V Validation Suite
 
 on:
+  # Pull requests are tested by the pull_request event; pushes are tested on main only,
+  # so a pushed pull-request branch does not run the suite twice.
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
-    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

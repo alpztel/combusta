@@ -41,6 +41,9 @@ From exported data to a comparison report, and the analyses needed to compare an
 - `examples/make_example_cases.py` and two manufactured example cases in `examples/cases/`.
 - `tests/test_12_data_intake.py`.
 
+### Changed
+- CI runs on pull requests and on pushes to `main` only (previously on every push as well, which ran the suite twice per pull request), cancels superseded pull-request runs, and can be started manually.
+
 ### Fixed
 - `write_case_directory` writes LF line endings on every platform, so the SHA-256 of a written trace no longer depends on the operating system (#17).
 - Without a temperature trace, `compute_cycle_metrics` reconstructed the temperature with the unburned gas constant. It now passes the trapped mass to `compute_heat_release(trapped_mass_kg=...)`, which evaluates $T = PV/(m R(x_b))$ inside the $x_b$ iteration. For hydrogen at λ = 2 the old behaviour overstated the gross heat release of a manufactured case by 0.4 %.
