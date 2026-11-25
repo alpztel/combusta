@@ -4,10 +4,10 @@ This directory serves as the workspace for open-literature **Engine Combustion N
 
 ## Strict Open-Science Policy
 - Zero proprietary engine geometries or OEM test-cell measurements are stored in this repository.
-- Official public Sandia ECN experimental penetration files (`.csv`, `.txt`, `.dat`) downloaded from [https://ecn.sandia.gov/](https://ecn.sandia.gov/) can be placed here locally and ingested directly into strict SI units (`s`, `m`) via `ice_cfd_validator.load_ecn_spray_data`:
+- Official public Sandia ECN experimental penetration files (`.csv`, `.txt`, `.dat`) downloaded from [https://ecn.sandia.gov/](https://ecn.sandia.gov/) can be placed here locally and ingested directly into strict SI units (`s`, `m`) via `combusta.load_ecn_spray_data`:
 
 ```python
-from ice_cfd_validator import compute_spray_validation_metrics, load_ecn_spray_data, parse_spray_csv
+from combusta import compute_spray_validation_metrics, load_ecn_spray_data, parse_spray_csv
 
 ecn = load_ecn_spray_data("benchmarks/ECN_SprayA_900K_22.8kgm3.txt", condition_label="ECN Spray A")
 cfd = parse_spray_csv("path/to/forte_spray.csv")

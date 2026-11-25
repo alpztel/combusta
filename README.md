@@ -1,16 +1,33 @@
-# `ice-cfd-validation-assistant`
+# Combusta
 
-[![Physics & ASME V&V Validation Suite](https://github.com/alpztel/ice-cfd-validation-assistant/actions/workflows/ci_validation.yml/badge.svg)](https://github.com/alpztel/ice-cfd-validation-assistant/actions/workflows/ci_validation.yml)
+[![CI](https://github.com/alpztel/combusta/actions/workflows/ci_validation.yml/badge.svg)](https://github.com/alpztel/combusta/actions/workflows/ci_validation.yml)
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-004488.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-117733.svg)](LICENSE)
-[![Standard: ASME V&V 20-2009](https://img.shields.io/badge/standard-ASME%20V%26V%2020--2009-BB5566.svg)](#5-asme-vv-20-2009--celik-et-al-2008-grid-convergence-index-gci)
-[![Atmosphere: ISO 2533:1975](https://img.shields.io/badge/atmosphere-ISO%202533%3A1975-228833.svg)](#4-iso-2533-standard-atmosphere--high-altitude-spray-scaling)
-[![Kinetics: Livengood--Wu](https://img.shields.io/badge/kinetics-Livengood--Wu%201955-EE7733.svg)](#6-auto-ignition-kinetics--dynamic-livengood-wu-integral-wolfer-1938-livengood--wu-1955-hardenberg--hase-1979-assanis-et-al-2003)
-[![Exergy: Second Law](https://img.shields.io/badge/thermodynamics-2nd%20Law%20Exergy-882255.svg)](#7-second-law-thermodynamics-dead-state--exergy-destruction-kotas-1995-caton-2000-rakopoulos--giakoumis-2006)
-[![Typed: PEP 561 | pyrefly](https://img.shields.io/badge/typing-PEP%20561%20%7C%20pyrefly-DDAA33.svg)](src/ice_cfd_validator/py.typed)
+[![Typed: PEP 561 | pyrefly](https://img.shields.io/badge/typing-PEP%20561%20%7C%20pyrefly-DDAA33.svg)](src/combusta/py.typed)
 [![Citation: CFF 1.2.0](https://img.shields.io/badge/cite-CITATION.cff-44AA99.svg)](CITATION.cff)
 
-**Open-source, strictly SI-normalized Python 3.11+ engineering toolkit for 0D/1D internal combustion engine (ICE) thermodynamic cycle diagnostics, Second-Law exergy budgets, high-altitude Aero-Diesel fuel-spray scaling, auto-ignition kinetics, and ASME V&V 20-2009 3D CFD mesh-independence verification — purpose-built for [ANSYS Forte](https://www.ansys.com/products/fluids/ansys-forte) (`thermo.csv`, `spray.csv`, `dynamic.csv`) and [Sandia Engine Combustion Network (ECN)](https://ecn.sandia.gov/) datasets.**
+**Combusta** is a fuel-agnostic Python toolkit for internal combustion engine cycle analysis, side-by-side comparison of engine cases, and verification & validation of CFD and test-bench data. It works with any C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> fuel, including hydrogen, and keeps every quantity in SI units.
+
+> [!NOTE]
+> The project was renamed from `ice-cfd-validation-assistant` (`ice_cfd_validator`) to **Combusta** (`combusta`). The sections below the quick start still document the 0.2.0 modules and are being revised.
+
+### Quick start: compare two engine cases
+
+```python
+from combusta import EngineCase, HYDROGEN, OperatingPoint, SliderCrankGeometry, compare_cases, parse_thermo_csv
+
+geometry = SliderCrankGeometry(bore_m=0.086, stroke_m=0.086, conrod_m=0.145, compression_ratio=12.0)
+op = OperatingPoint(rpm=2000.0, fuel=HYDROGEN, lambda_air=2.0, fuel_mass_per_cycle_kg=1.1e-5)
+
+open_chamber = EngineCase.from_forte_thermo("open chamber", parse_thermo_csv("open/thermo.csv"), geometry=geometry, operating_point=op)
+pre_chamber = EngineCase.from_forte_thermo("pre-chamber", parse_thermo_csv("prechamber/thermo.csv"), geometry=geometry, operating_point=op)
+
+print(open_chamber.volume_consistency_error())   # sanity check of geometry vs. exported volume
+comparison = compare_cases([open_chamber, pre_chamber])
+print(comparison.to_markdown())                   # Pmax, IMEP, efficiency, ISFC, CA10/50/90, ...
+```
+
+Heat release uses mass-fraction-burned-weighted unburned/burned gas properties when `lambda_air` is known. Pass per-case numerical uncertainties (for example `uncertainty_from_gci(...)` from a three-grid study) to `compare_cases` to see which differences exceed the numerical uncertainty.
 
 [Overview](#exhaustive-capability-overview) • [Architecture](#package-architecture--strict-si-unit-engine) • [Theory](#mathematical--physical-formulations) • [Visual Showcase](#aero-diesel-high-altitude-showcase-0-ft--15000-ft--30000-ft) • [Complete API](#complete-public-api-reference) • [Code Recipes](#installation-quickstart--engineering-recipes) • [Verification Audit](#independent-verification--strict-physical-audit-65-tests) • [Structure](#repository-structure) • [Citation](#how-to-cite) • [References](#references) • [License](#license)
 
@@ -22,7 +39,7 @@
 <details>
 <summary><b>🇹🇷 Türkçe Kapsamlı Kütüphane Özeti — Bu Kütüphane Neler Yapabilir? (Genişletmek için tıklayın)</b></summary>
 
-**`ice-cfd-validation-assistant`**, 3B içten yanmalı motor CFD simülasyonlarının (**ANSYS Forte**) ve deneysel sprey/yanma verilerinin (**Sandia ECN**) uluslararası akademik ve endüstriyel standartlara (**Heywood, SAE, ISO 2533, ASME V&V 20-2009, Kotas, Rakopoulos & Giakoumis**) göre doğrulanması (*Verification & Validation*) için geliştirilmiş, tam vektörize ve tip güvenli (`PEP 561` / `pyrefly`) bir Python mühendislik kütüphanesidir.
+**`combusta`**, 3B içten yanmalı motor CFD simülasyonlarının (**ANSYS Forte**) ve deneysel sprey/yanma verilerinin (**Sandia ECN**) uluslararası akademik ve endüstriyel standartlara (**Heywood, SAE, ISO 2533, ASME V&V 20-2009, Kotas, Rakopoulos & Giakoumis**) göre doğrulanması (*Verification & Validation*) için geliştirilmiş, tam vektörize ve tip güvenli (`PEP 561` / `pyrefly`) bir Python mühendislik kütüphanesidir.
 
 **Eksiksiz Yetenek Özeti:**
 1. **Otomatik Birim Algılama ve Katı SI Normalizasyonu (`io/` & `constants.py`):**
@@ -91,9 +108,9 @@
 
 ## Exhaustive Capability Overview
 
-`ice-cfd-validation-assistant` eliminates ad-hoc spreadsheet macros and unit-fragile post-processing scripts across the entire 3D ICE CFD workflow. Every numerical routine is **loop-free (`numpy`/`scipy` vectorized)**, **immutable (`@dataclass(frozen=True, slots=True)`)**, and **statically type-checked (`pyrefly`)**.
+`combusta` eliminates ad-hoc spreadsheet macros and unit-fragile post-processing scripts across the entire 3D ICE CFD workflow. Every numerical routine is **loop-free (`numpy`/`scipy` vectorized)**, **immutable (`@dataclass(frozen=True, slots=True)`)**, and **statically type-checked (`pyrefly`)**.
 
-### 1. Automated Unit-Safe CFD & Experimental Data Ingestion (`ice_cfd_validator.io`)
+### 1. Automated Unit-Safe CFD & Experimental Data Ingestion (`combusta.io`)
 - **ANSYS Forte Monitor Parsers (`forte_parser.py`)**:
   - Automatically parses both **1-row inline-unit headers** (`Pressure [MPa]`, `Volume (cm^3)`) and **2-row ANSYS Forte headers** (variable name row + unit token row), handling UTF-8 BOMs (`utf-8-sig`), `#` comment lines, and Unicode superscripts/symbols (`cm³` → `cm^3`, `µm`/`μm` → `um`, `°C` → `C`).
   - `parse_thermo_csv`: Extracts crank angle ($\theta$ in both `deg` and `rad`), spatially averaged pressure ($P$ [`Pa`]), cylinder volume ($V$ [`m^3`]), mass-averaged temperature ($T$ [`K`]), simulation time ($t$ [`s`]), trapped mass ($m$ [`kg`]), and wall heat-loss rate ($dQ_{ht}/d\theta$ [`J/deg`]).
@@ -103,7 +120,7 @@
 - **Sandia ECN Experimental Benchmark Loader (`ecn_loader.py`)**:
   - `load_ecn_spray_data`: Parses comma-delimited (`.csv`) and whitespace-delimited (`.txt`, `.dat`) **ECN Spray A / Spray D** tables with `#` or `%` metadata headers, automatically trims pre-SOI negative timestamps ($t < 0$), normalizes liquid and vapor penetration into meters, and preserves ensemble standard deviations ($`\sigma_L, \sigma_V`$ [`m`]) for ASME V&V 20-2009 experimental uncertainty ($`u_D`$) quantification.
 
-### 2. Zero-Phase Signal Processing & $\mathcal{O}(\Delta\theta^4)$ Differentiation (`ice_cfd_validator.signal`)
+### 2. Zero-Phase Signal Processing & $\mathcal{O}(\Delta\theta^4)$ Differentiation (`combusta.signal`)
 - **Zero-Phase Savitzky–Golay Filtering (`savgol_zero_phase`)**: Symmetric local polynomial smoothing that suppresses high-frequency pressure transducer or CFD AMR noise while maintaining **zero group delay**, preventing artificial `CA50` combustion-phasing shifts.
 - **Zero-Phase Forward–Backward Butterworth Filtering (`butterworth_zero_phase`)**: Second-order sections (`scipy.signal.sosfiltfilt`) low-pass, high-pass, and bandpass filtering with zero phase distortion and $2\times$ filter-order attenuation — used both for pressure conditioning and `4–20 kHz` acoustic knock isolation.
 - **Hybrid 4th-Order / Cubic-Spline Differentiation (`compute_derivative`)**:
@@ -111,14 +128,14 @@
   - Evaluates exact vectorized **5-point $\mathcal{O}(\Delta\theta^4)$ central finite differences** on interior points paired with **5-point $\mathcal{O}(\Delta\theta^4)$ one-sided Fornberg (1988) boundary stencils** on uniform crank-angle grids.
   - Switches seamlessly to analytical first derivatives of **not-a-knot `CubicSpline`** interpolants on non-uniform adaptive time-step CFD outputs.
 
-### 3. Slider-Crank Kinematics & Motored TDC Phasing Audit (`ice_cfd_validator.thermo.kinematics`)
+### 3. Slider-Crank Kinematics & Motored TDC Phasing Audit (`combusta.thermo.kinematics`)
 - **Centered & Wrist-Pin-Offset Kinematics (`SliderCrankGeometry`)**:
   - Computes exact instantaneous volume $V(\theta)$ [`m^3`], analytical volume derivative $dV/d\theta$ [`m^3/deg`] (explicitly incorporating the $\pi/180$ rad-to-deg Jacobian), axial piston displacement $s(\theta)$ [`m`], and exposed combustion-chamber surface area $A_w(\theta)$ [`m^2`] (with configurable piston-bowl `crown_area_multiplier`).
   - Accounts for non-zero lateral wrist-pin offset ($e \neq 0$) in true extreme dead-center swept volume $`V_d`$ and clearance volume $`V_c = V_d / (r_c - 1)`$.
 - **Thermodynamic TDC Phasing Verification (`verify_tdc_phasing`)**:
   - Locates sub-degree motored peak pressure ($`\theta_{P_{\max}}`$) and minimum geometric volume ($`\theta_{V_{\min}}`$) via local cubic-spline derivative root-finding, computes the thermodynamic heat-loss angle ($`\theta_{V_{\min}} - \theta_{P_{\max}}`$), and raises `TDCPhaseError` (or `UserWarning`) if encoder/mesh phase drift exceeds $\pm 0.5^\circ$ CA.
 
-### 4. Temperature-Dependent $\gamma(T)$, First-Law Thermodynamics, Heat Transfer & Knock (`ice_cfd_validator.thermo`)
+### 4. Temperature-Dependent $\gamma(T)$, First-Law Thermodynamics, Heat Transfer & Knock (`combusta.thermo`)
 - **14-Coefficient (2 × 7-Term) NASA Glenn Polynomials (`nasa_polynomials.py`)**:
   - Evaluates vectorized $`c_p(T)`$ [`J/(kg*K)`], $`c_v(T)`$ [`J/(kg*K)`], and $`\gamma(T) = c_p(T)/c_v(T)`$ [`-`] across `200–1000 K` and `1000–6000 K` using NASA RP-1311 / GRI-Mech 3.0 coefficients for $\mathrm{N_2, O_2, Ar, CO_2, H_2O}$ with continuous ($C^0$) handoff at $T = 1000\ \mathrm{K}$.
   - Ships with ready-to-use `DRY_AIR` ($\phi = 0.0$), `DIESEL_BURNED_PRODUCTS` ($n\text{-}\mathrm{C_{12}H_{26}}$ Aero-Diesel surrogate at $\phi = 0.7$), `STOICHIOMETRIC_PRODUCTS` ($\phi = 1.0$), plus `mix_nasa_species` and `make_combustion_mixture(equivalence_ratio, h_c_ratio)` builders.
@@ -142,7 +159,7 @@
   - Evaluates $`(\rho_{g,\mathrm{SL}} / \rho_{g,\mathrm{alt}})^{0.25}`$ penetration stretch and solves analytically for exact sub-step piston-bowl / cylinder-liner impingement onset time $`t_{\mathrm{imp}}`$ [`s`] when $`S(t) \ge L_{\mathrm{wall}}`$.
   - Computes `RMSE` [`m`], zero-floor-guarded `MAPE` [`%`], relative $`L_2`$ error [`-`], and $`L_\infty`$ maximum deviation [`m`] with automatic linear interpolation across asynchronous CFD and experimental time bases.
 
-### 6. ASME V&V 20-2009 3D Mesh Independence & AMR Oscillation Guard (`ice_cfd_validator.vv`)
+### 6. ASME V&V 20-2009 3D Mesh Independence & AMR Oscillation Guard (`combusta.vv`)
 - **3D Cube-Root Representative Spacing (`compute_grid_size`)**:
   - Computes $h_i = (\Delta V_{\text{mean}, i})^{1/3}$ [`m`], $h_i = (V_{\text{domain}} / N_i)^{1/3}$ [`m`], or normalized $h_i = (N_1 / N_i)^{1/3}$ [`-`], enforces strict Fine $<$ Medium $<$ Coarse ordering ($h_1 < h_2 < h_3$), and warns automatically when $r_{21} < 1.3$ or $r_{32} < 1.3$ per ASME V&V 20-2009.
 - **Non-Uniform & AMR-Safe GCI Solver (`compute_gci`)**:
@@ -151,7 +168,7 @@
   - Solves the transcendental non-uniform apparent order $p$ equation via primary-branch Aitken $\Delta^2$ acceleration (`scipy.optimize.fixed_point`) backed by 1024-point bracketed Brent root-finding (`brentq`) to $\lvert p - g(p)\rvert \le 10^{-11}$.
   - Reports $`\phi_{\mathrm{ext}}^{21}, \phi_{\mathrm{ext}}^{32}`$, $`e_a^{21}, e_a^{32}, e_{\mathrm{ext}}^{21}`$, $`GCI_{\mathrm{fine}}^{21}, GCI_{32}`$ ($F_s = 1.25$), Roache asymptotic ratio, and scale-invariant error-coefficient asymptotic ratio.
 
-### 7. High-Altitude Auto-Ignition Kinetics, Livengood-Wu & CFD Diagnostics (`ice_cfd_validator.ignition`)
+### 7. High-Altitude Auto-Ignition Kinetics, Livengood-Wu & CFD Diagnostics (`combusta.ignition`)
 - **Empirical Arrhenius & Hardenberg-Hase Auto-Ignition Delay (`correlations.py`)**:
   - Implements **Wolfer (1938)** and **Assanis et al. (2003)** Arrhenius models $`\tau_{\mathrm{id}} = A P^{-n} \phi^{-m} \exp(E_a / (R_u T))`$ parameterized for EN590 Diesel and aviation kerosene (Jet-A1 / JP-8 / F-34).
   - Implements **Hardenberg & Hase (1979, SAE 790493)** global diesel ignition delay correlation with activation energy scaled directly from Cetane Number ($`E_a = 618840 / (\mathrm{CN} + 25)\ \mathrm{J/mol}`$), mean piston speed $`\bar{S}_p`$, and strict $`P_{\mathrm{TDC}} \le 1.24\ \mathrm{MPa}`$ ($12.4\ \mathrm{bar}$) singularity guards.
@@ -164,7 +181,7 @@
   - Extracts multi-criteria chronological ignition metrics: $`\theta_{\mathrm{SOC}}^{\mathrm{AHRR0}} < \mathrm{CA01} < \mathrm{CA02} < \mathrm{CA05} < \theta_{\max(d^2P/d\theta^2)}`$.
   - Decomposes two-stage low-temperature combustion into Low-Temperature Heat Release (LTHR), Negative Temperature Coefficient (NTC) dwell, and High-Temperature Heat Release (HTHR) peaks, with defensive guards preventing false-positive LTHR detections on single-stage Wiebe curves.
 
-### 8. Second-Law Thermodynamics, Altitude Dead-State & Exergy Budget (`ice_cfd_validator.exergy`)
+### 8. Second-Law Thermodynamics, Altitude Dead-State & Exergy Budget (`combusta.exergy`)
 - **Altitude-Dependent Thermodynamic Dead State (`dead_state.py`)**:
   - Computes environmental dead-state $`(P_0(z), T_0(z), \rho_0(z))`$ via ISO 2533 extending through the $11\ \mathrm{km}$ tropopause to the $15\ \mathrm{km}$ isothermal stratosphere.
   - Implements **Kotas (1995)** chemical exergy factor $\varphi = 1.0401 + 0.1728 \cdot (h/c)$ supporting both mass ratio $h/c$ and atomic ratio $(H/C)$ with NIST IUPAC atomic weights ($M_H = 1.00794, M_C = 12.0107$).
@@ -176,7 +193,7 @@
   - Evaluates full closed-cycle Second-Law exergy balance ($`E_{\mathrm{in}} = E_{\mathrm{work,net}} + E_{Q,\mathrm{wall}} + \Delta E_{\mathrm{tm,exhaust}} + E_{\mathrm{dest}}`$) closing to $100.000000\%$ with $< 10^{-9}\ \mathrm{J}$ error.
   - Demonstrates high-altitude blowdown exergy recovery potential ($+24.87\%$ gain at $30{,}000\ \mathrm{ft}$).
 
-### 9. Headless 300-DPI SAE / IEEE Publication Visualizers (`ice_cfd_validator.plotting`)
+### 9. Headless 300-DPI SAE / IEEE Publication Visualizers (`combusta.plotting`)
 - Built directly on `matplotlib.figure.Figure` + `FigureCanvasAgg` without touching global `pyplot` state (zero memory leaks across batch sweeps; 100% compatible with headless Linux clusters and GitHub Actions):
   - `plot_thermo_diagnostics`: 3-row shared crank-angle ($\theta$) panel ($P$ [`MPa`], Net/Gross $dQ/d\theta$ [`J/deg`] with shaded wall heat loss, and `MFB` [`%`] with `CA10`/`CA50`/`CA90` callouts and multi-altitude `ThermoOverlayTrace` support).
   - `plot_pv_log_diagram`: $\log_{10}(P) - \log_{10}(V/V_{\max})$ indicator diagram with automatic linear least-squares regression of compression ($\kappa_{\text{comp}}$) and expansion ($\kappa_{\text{exp}}$) polytropic exponents.
@@ -400,7 +417,7 @@ Executing `python examples/altitude_sweep_demo.py` runs an end-to-end 4-stroke t
 
 ## Complete Public API Reference
 
-Every symbol below is re-exported directly from the top-level `ice_cfd_validator` namespace (`from ice_cfd_validator import ...`):
+Every symbol below is re-exported directly from the top-level `combusta` namespace (`from combusta import ...`):
 
 ### Functions
 
@@ -465,8 +482,8 @@ Every symbol below is re-exported directly from the top-level `ice_cfd_validator
 ### Installation
 
 ```bash
-git clone https://github.com/alpztel/ice-cfd-validation-assistant.git
-cd ice-cfd-validation-assistant
+git clone https://github.com/alpztel/combusta.git
+cd combusta
 
 # Recommended: create a virtual environment and install with dev/typing tools
 python -m venv .venv
@@ -480,7 +497,7 @@ pip install -e ".[dev]"
 ### Recipe 1 — ANSYS Forte `thermo.csv` First-Law AHRR, Woschni Heat Loss, MFB & Knock
 
 ```python
-from ice_cfd_validator import (
+from combusta import (
     DIESEL_BURNED_PRODUCTS,
     DRY_AIR,
     SliderCrankGeometry,
@@ -529,7 +546,7 @@ print(f"Net IMEP={imep.imep_net_pa * 1e-5:.2f} bar | Ringing Intensity={knock.ri
 
 ```python
 import numpy as np
-from ice_cfd_validator import (
+from combusta import (
     FEET_TO_M,
     compute_isa_conditions,
     compute_spray_validation_metrics,
@@ -571,7 +588,7 @@ print(f"RMSE={err.rmse_m * 1e3:.2f} mm | MAPE={err.mape_pct:.2f}% | Rel-L2={err.
 ### Recipe 3 — ASME V&V 20-2009 Three-Grid GCI (Monotonic & Oscillatory AMR)
 
 ```python
-from ice_cfd_validator import compute_gci, compute_grid_size, plot_gci_convergence
+from combusta import compute_gci, compute_grid_size, plot_gci_convergence
 
 # 3D mesh triplet: Fine = 1.92M cells, Medium = 680k cells, Coarse = 235k cells
 grid = compute_grid_size(cell_counts=(1_920_000, 680_000, 235_000), domain_volume_m3=5.6e-4)
@@ -593,7 +610,7 @@ plot_gci_convergence(
 ### Recipe 4 — Dynamic Livengood-Wu Auto-Ignition & Two-Stage CFD Diagnostics
 
 ```python
-from ice_cfd_validator import (
+from combusta import (
     ASSANIS_2003,
     extract_cfd_ignition_metrics,
     livengood_wu_integral,
@@ -631,7 +648,7 @@ if cfd_metrics.two_stage.two_stage_detected:
 ### Recipe 5 — Altitude Dead-State Second-Law Exergy Budget & Blowdown Recovery
 
 ```python
-from ice_cfd_validator import (
+from combusta import (
     FEET_TO_M,
     JET_A1_EXERGY_FACTOR,
     DeadStateConditions,
@@ -705,7 +722,7 @@ Every physics module is verified against closed-form analytical identities, IEEE
 ## Repository Structure
 
 ```text
-ice-cfd-validation-assistant/
+combusta/
 ├── .github/
 │   └── workflows/
 │       └── ci_validation.yml          # Ubuntu CI (Python 3.11 / 3.12 / 3.13): pyrefly + pytest + demo
@@ -720,7 +737,7 @@ ice-cfd-validation-assistant/
 │   ├── README.md
 │   └── altitude_sweep_demo.py         # 0 ft / 15,000 ft / 30,000 ft Aero-Diesel sweep
 ├── src/
-│   └── ice_cfd_validator/
+│   └── combusta/
 │       ├── __init__.py                # Top-level public API exports (__version__ = "0.2.0")
 │       ├── py.typed                   # PEP 561 inline static-typing marker
 │       ├── constants.py               # CODATA/NIST SI conversion maps & ISO 2533 ISA model
@@ -781,15 +798,15 @@ ice-cfd-validation-assistant/
 
 ## How to Cite
 
-If you use **`ice-cfd-validation-assistant`** in academic papers, theses, or CFD verification reports, please use GitHub's **"Cite this repository"** button (powered by [`CITATION.cff`](CITATION.cff)) or the following `BibTeX` entry:
+If you use **`combusta`** in academic papers, theses, or CFD verification reports, please use GitHub's **"Cite this repository"** button (powered by [`CITATION.cff`](CITATION.cff)) or the following `BibTeX` entry:
 
 ```bibtex
 @software{oztel2026icecfd,
   author       = {{\"O}ztel, Alperen},
-  title        = {{ice-cfd-validation-assistant}: Open-Source 0D/1D ICE Thermodynamic Diagnostics, High-Altitude Aero-Diesel Spray Physics, Auto-Ignition Kinetics, Second-Law Exergy Budgets, and ASME V\&V 20-2009 3D CFD Validation Toolkit},
+  title        = {{combusta}: Open-Source 0D/1D ICE Thermodynamic Diagnostics, High-Altitude Aero-Diesel Spray Physics, Auto-Ignition Kinetics, Second-Law Exergy Budgets, and ASME V\&V 20-2009 3D CFD Validation Toolkit},
   version      = {0.2.0},
   year         = {2026},
-  url          = {https://github.com/alpztel/ice-cfd-validation-assistant},
+  url          = {https://github.com/alpztel/combusta},
   license      = {MIT}
 }
 ```
@@ -828,7 +845,7 @@ If you use **`ice-cfd-validation-assistant`** in academic papers, theses, or CFD
 ## License & Third-Party Notices
 
 ### Core Software License
-The `ice-cfd-validation-assistant` source code is distributed under the open-source **[MIT License](LICENSE)**:
+The `combusta` source code is distributed under the open-source **[MIT License](LICENSE)**:
 
 ```text
 Copyright (c) 2026 Alperen Öztel

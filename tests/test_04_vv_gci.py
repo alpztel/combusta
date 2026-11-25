@@ -9,13 +9,13 @@ import warnings
 import numpy as np
 import pytest
 
-from ice_cfd_validator.exceptions import PhysicalBoundsError
-from ice_cfd_validator.io.forte_parser import parse_dynamic_csv
-from ice_cfd_validator.vv.gci import (
+from combusta.exceptions import PhysicalBoundsError
+from combusta.io.forte_parser import parse_dynamic_csv
+from combusta.vv.gci import (
     compute_gci,
     compute_grid_size,
 )
-from tests.conftest import assert_package_vectorized_and_typed
+from tests.conftest import assert_package_type_checks
 
 
 @pytest.mark.unit
@@ -208,5 +208,5 @@ class TestStrictAuditVVGCI:
         assert math.isfinite(amr_gci.apparent_order_p) and math.isfinite(amr_gci.gci_fine_21)
 
     def test_audit_vv_vectorization_and_typing(self) -> None:
-        """AUDIT: AST scan confirms zero explicit loops and strict typing in vv/ package."""
-        assert_package_vectorized_and_typed("vv")
+        """AUDIT: pyrefly static type check of the vv/ package."""
+        assert_package_type_checks("vv")

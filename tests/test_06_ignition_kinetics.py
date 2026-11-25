@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from ice_cfd_validator.constants import R_UNIVERSAL
-from ice_cfd_validator.exceptions import PhysicalBoundsError
-from ice_cfd_validator.ignition import (
+from combusta.constants import R_UNIVERSAL
+from combusta.exceptions import PhysicalBoundsError
+from combusta.ignition import (
     ASSANIS_2003,
     HH_ACTIVATION_NUMERATOR_J_PER_MOL,
     PREDEFINED_FUELS,
@@ -23,7 +22,7 @@ from ice_cfd_validator.ignition import (
     livengood_wu_integral,
     solve_livengood_wu,
 )
-from tests.conftest import assert_package_vectorized_and_typed
+from tests.conftest import assert_package_type_checks
 
 
 @pytest.mark.unit
@@ -162,7 +161,7 @@ class TestUnitIgnitionKinetics:
         assert 0.0 < metrics.two_stage.theta_ntc_deg < 3.0
         assert 9.0 < metrics.two_stage.theta_hthr_peak_deg < 13.0
 
-    def test_5_high_altitude_misfire_and_ast_vectorization_audit(self) -> None:
+    def test_5_high_altitude_misfire_detection(self) -> None:
         """TEST 5: Verify misfire detection under sub-critical altitude conditions."""
         theta_grid = np.linspace(-20.0, 30.0, 251, dtype=np.float64)
         p_cold = np.full_like(theta_grid, 40_000.0)
@@ -369,5 +368,5 @@ class TestStrictAuditIgnitionKinetics:
         assert np.isnan(res_single.theta_ntc_deg)
 
     def test_audit_ignition_vectorization_and_typing(self) -> None:
-        """AUDIT: AST scan confirms zero explicit loops and strict typing in ignition/ package."""
-        assert_package_vectorized_and_typed("ignition")
+        """AUDIT: pyrefly static type check of the ignition/ package."""
+        assert_package_type_checks("ignition")

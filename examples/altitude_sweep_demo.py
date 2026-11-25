@@ -31,7 +31,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-from ice_cfd_validator import (  # noqa: E402
+from combusta import (  # noqa: E402
     DRY_AIR,
     FEET_TO_M,
     PREDEFINED_FUELS,
@@ -220,7 +220,7 @@ def simulate_aero_diesel_altitude_case(
     p_exact_pa = np.asarray(ode_sol.y[0], dtype=np.float64)
 
     # Add realistic piezoelectric transducer noise (3.5 kPa RMS) & apply zero-phase filter
-    rng = np.random.default_rng(rng_seed + int(round(altitude_ft)))
+    rng = np.random.default_rng(rng_seed + round(altitude_ft))
     p_measured_pa = p_exact_pa + rng.normal(0.0, 3_500.0, size=p_exact_pa.shape)
     p_filtered_pa = savgol_zero_phase(p_measured_pa, window_length=31, polyorder=3)
     t_filtered_k = (p_filtered_pa * kin.volume_m3) / (trapped_mass_kg * r_spec)

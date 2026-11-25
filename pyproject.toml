@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ice-cfd-validation-assistant"
+name = "combusta"
 version = "0.2.0"
-description = "Open-source 0D/1D thermodynamic cycle diagnostics, Second-Law exergy budgets, high-altitude Aero-Diesel spray physics, auto-ignition kinetics, and ASME V&V 20-2009 3D CFD validation toolkit for ANSYS Forte and Sandia ECN datasets."
+description = "Combusta: fuel-agnostic internal combustion engine cycle analysis, case comparison, and verification & validation (ASME V&V 20) toolkit for CFD and test-bench data."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -65,17 +65,17 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/alpztel/ice-cfd-validation-assistant"
-Repository = "https://github.com/alpztel/ice-cfd-validation-assistant.git"
-Documentation = "https://github.com/alpztel/ice-cfd-validation-assistant#readme"
-Issues = "https://github.com/alpztel/ice-cfd-validation-assistant/issues"
-Changelog = "https://github.com/alpztel/ice-cfd-validation-assistant/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/alpztel/combusta"
+Repository = "https://github.com/alpztel/combusta.git"
+Documentation = "https://github.com/alpztel/combusta#readme"
+Issues = "https://github.com/alpztel/combusta/issues"
+Changelog = "https://github.com/alpztel/combusta/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ice_cfd_validator = ["py.typed"]
+combusta = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

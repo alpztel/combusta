@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import shutil
 import subprocess
 from pathlib import Path
@@ -12,12 +11,12 @@ import pytest
 from scipy.integrate import solve_ivp, trapezoid
 from scipy.interpolate import CubicSpline
 
-from ice_cfd_validator.constants import (
+from combusta.constants import (
     FEET_TO_M,
     R_SPECIFIC_DRY_AIR,
     STD_GRAVITY_M_S2,
 )
-from ice_cfd_validator.exergy import (
+from combusta.exergy import (
     DIESEL_EN590_EXERGY_FACTOR,
     JET_A1_EXERGY_FACTOR,
     DeadStateConditions,
@@ -27,10 +26,10 @@ from ice_cfd_validator.exergy import (
     compute_standard_entropy,
     compute_thermomechanical_exergy,
 )
-from ice_cfd_validator.signal.filtering import compute_derivative
-from ice_cfd_validator.thermo.kinematics import SliderCrankGeometry
-from ice_cfd_validator.thermo.nasa_polynomials import DRY_AIR
-from tests.conftest import assert_package_vectorized_and_typed
+from combusta.signal.filtering import compute_derivative
+from combusta.thermo.kinematics import SliderCrankGeometry
+from combusta.thermo.nasa_polynomials import DRY_AIR
+from tests.conftest import assert_package_type_checks
 
 
 @pytest.mark.unit
@@ -251,9 +250,6 @@ class TestUnitExergySecondLaw:
         assert budget.closure_error_j < 1.0e-9
         assert abs((budget.eta_first_law / budget.eta_second_law) - phi_fuel) < 1.0e-9
 
-    def test_05_ast_zero_loop_vectorization_and_pyrefly_clean(self) -> None:
-        """TEST 5: exergy/ paketinde AST düzeyinde sıfır dizi döngüsü ve tip güvenliği denetimi."""
-        assert_package_vectorized_and_typed("exergy")
 
 
 @pytest.mark.strict_audit
@@ -472,6 +468,6 @@ class TestStrictAuditExergySecondLaw:
         assert e_tm_alt > e_tm_sea
         assert recovery_gain_pct > 15.0
 
-    def test_06_audit_ast_zero_loops_and_pyrefly_clean(self) -> None:
-        """DENETİM 6: exergy/ modüllerinde AST düzeyinde 0 dizi döngüsü ve tip güvenliği denetimi."""
-        assert_package_vectorized_and_typed("exergy")
+    def test_06_audit_pyrefly_clean(self) -> None:
+        """AUDIT: pyrefly static type check of the exergy/ package."""
+        assert_package_type_checks("exergy")

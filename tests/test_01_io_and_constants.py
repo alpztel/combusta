@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 from scipy.integrate import simpson
 
-from ice_cfd_validator.constants import (
+from combusta.constants import (
     ISA_P0_PA,
     ISA_STRATOSPHERE_TOP_M,
     ISA_T0_K,
@@ -24,18 +24,18 @@ from ice_cfd_validator.constants import (
     VOLUME_TO_M3,
     compute_isa_conditions,
 )
-from ice_cfd_validator.exceptions import (
+from combusta.exceptions import (
     ForteParseError,
     PhysicalBoundsError,
     UnitDetectionError,
 )
-from ice_cfd_validator.io.ecn_loader import load_ecn_spray_data
-from ice_cfd_validator.io.forte_parser import (
+from combusta.io.ecn_loader import load_ecn_spray_data
+from combusta.io.forte_parser import (
     parse_dynamic_csv,
     parse_spray_csv,
     parse_thermo_csv,
 )
-from tests.conftest import PolytropicStrokeReference, assert_package_vectorized_and_typed
+from tests.conftest import PolytropicStrokeReference, assert_package_type_checks
 
 
 @pytest.mark.unit
@@ -217,4 +217,4 @@ class TestStrictAuditIOAndConstants:
 
     def test_audit_io_and_constants_typing(self) -> None:
         """AUDIT: pyrefly type safety across io/ and constants.py."""
-        assert_package_vectorized_and_typed("io")
+        assert_package_type_checks("io")

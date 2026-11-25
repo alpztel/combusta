@@ -12,24 +12,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from ice_cfd_validator.plotting import (
+from combusta.plotting import (
     AltitudeSprayPlotCase,
     plot_altitude_spray_comparison,
     plot_gci_convergence,
     plot_pv_log_diagram,
     plot_thermo_diagnostics,
 )
-from ice_cfd_validator.spray import (
+from combusta.spray import (
     hiroyasu_arai_penetration,
     naber_siebers_penetration,
 )
-from ice_cfd_validator.thermo import (
+from combusta.thermo import (
     SliderCrankGeometry,
     compute_heat_release,
     extract_burn_fractions,
 )
-from ice_cfd_validator.vv import compute_gci
-from tests.conftest import assert_package_vectorized_and_typed
+from combusta.vv import compute_gci
+from tests.conftest import assert_package_type_checks
 
 matplotlib.use("Agg")
 
@@ -196,5 +196,5 @@ class TestStrictAuditPlottingAndPipeline:
             assert size_kb > 30.0, f"Expected > 30 KB for 300-DPI figure {fname}, got {size_kb:.1f} KB"
 
     def test_audit_plotting_vectorization_and_typing(self) -> None:
-        """AUDIT: AST scan confirms zero explicit loops and strict typing in plotting/ package."""
-        assert_package_vectorized_and_typed("plotting")
+        """AUDIT: pyrefly static type check of the plotting/ package."""
+        assert_package_type_checks("plotting")

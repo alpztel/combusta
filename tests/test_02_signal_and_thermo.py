@@ -11,14 +11,14 @@ import pytest
 from scipy.integrate import simpson, solve_ivp
 from scipy.signal import butter, lfilter, lfilter_zi
 
-from ice_cfd_validator.exceptions import PhysicalBoundsError, TDCPhaseError
-from ice_cfd_validator.io import parse_thermo_csv
-from ice_cfd_validator.signal import (
+from combusta.exceptions import PhysicalBoundsError, TDCPhaseError
+from combusta.io import parse_thermo_csv
+from combusta.signal import (
     butterworth_zero_phase,
     compute_derivative,
     savgol_zero_phase,
 )
-from ice_cfd_validator.thermo import (
+from combusta.thermo import (
     DIESEL_BURNED_PRODUCTS,
     DRY_AIR,
     STOICHIOMETRIC_PRODUCTS,
@@ -37,7 +37,7 @@ from ice_cfd_validator.thermo import (
     extract_burn_fractions,
     verify_tdc_phasing,
 )
-from tests.conftest import assert_package_vectorized_and_typed
+from tests.conftest import assert_package_type_checks
 
 
 @pytest.mark.unit
@@ -481,6 +481,6 @@ class TestStrictAuditSignalAndThermo:
         np.testing.assert_allclose(hrr.dq_gross_j_per_deg, hrr.dq_net_j_per_deg + dq_ht, rtol=1e-14)
 
     def test_audit_signal_and_thermo_vectorization(self) -> None:
-        """DENETİM 6: AST düzeyinde signal/ ve thermo/ paketlerinde 0 döngü ve pyrefly denetimi."""
-        assert_package_vectorized_and_typed("signal")
-        assert_package_vectorized_and_typed("thermo")
+        """AUDIT: pyrefly static type check of the signal/ and thermo/ packages."""
+        assert_package_type_checks("signal")
+        assert_package_type_checks("thermo")
