@@ -10,7 +10,7 @@
 **Combusta** is a Python library for the analysis of internal combustion engine cycles from simulation and test-bench data. It reduces crank-angle-resolved pressure traces to standard cycle metrics, compares engine configurations side by side, post-processes exhaust emissions, and quantifies numerical and validation uncertainty following ASME V&V 20. Thermodynamic properties are fuel-agnostic: any C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> fuel, including hydrogen, is supported at any air-excess ratio, and every quantity is held in SI units.
 
 > [!IMPORTANT]
-> **Project status — 0.3.0 (alpha).** Every model is verified against closed-form solutions and published reference data (see [Verification](#verification)). The library has **not yet been validated against engine or CFD measurements**, and its readers have not yet been exercised on real ANSYS Forte output. Treat results as research-grade until such validation is available.
+> **Project status — 0.4.0 (alpha).** Every model is verified against closed-form solutions and published reference data (see [Verification](#verification)). The library has **not yet been validated against engine or CFD measurements**, and its readers have not yet been exercised on real ANSYS Forte output. Treat results as research-grade until such validation is available.
 
 <details>
 <summary><b>Türkçe özet</b></summary>
@@ -57,7 +57,7 @@ Combusta, içten yanmalı motor çevrimlerini simülasyon (ör. ANSYS Forte) ve 
 Combusta requires Python 3.11 or later. It is not published on PyPI. To use a tagged release, install it from GitHub:
 
 ```bash
-python -m pip install "combusta @ git+https://github.com/alpztel/combusta.git@v0.3.0"
+python -m pip install "combusta @ git+https://github.com/alpztel/combusta.git@v0.4.0"
 ```
 
 The wheel and source distribution of each version are also attached to its [GitHub release](https://github.com/alpztel/combusta/releases), with build provenance attestations that can be checked with `gh attestation verify <file> --repo alpztel/combusta`.
