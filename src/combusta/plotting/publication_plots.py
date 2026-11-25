@@ -845,3 +845,104 @@ def plot_case_overlay(
         for ax in (ax_p, ax_q):
             ax.grid(True, lw=0.4, alpha=0.5)
         return _finalize_and_save(fig, save_path, dpi)
+
+
+@dataclass(frozen=True, slots=True)
+class SweepPlotSeries:
+    """One configuration's spark-timing sweep for :func:`plot_sweep_overview`.
+
+    Attributes
+    ----------
+    label : str
+        Configuration name.
+    ignition_timing_deg : NDArray[np.float64]
+        Spark timing per sweep point [deg ATDC] (``nan`` if unknown).
+    imep_pa : NDArray[np.float64]
+        Gross IMEP per sweep point [Pa].
+    ca50_deg : NDArray[np.float64]
+        CA50 per sweep point [deg ATDC].
+    efficiency : NDArray[np.float64]
+        Gross indicated efficiency per sweep point [-] (``nan`` if unknown).
+    mbt_deg : float
+        Fitted MBT timing [deg ATDC], ``nan`` if not fitted.
+    mbt_coefficients : tuple[float, float, float] | None
+        Quadratic fit $(a, b, c)$ of IMEP [Pa] vs spark timing [deg].
+    fit_range_deg : tuple[float, float] | None
+        Spark-timing range of the fit [deg ATDC].
+    """
+
+    label: str
+    ignition_timing_deg: FloatArray
+    imep_pa: FloatArray
+    ca50_deg: FloatArray
+    efficiency: FloatArray
+    mbt_deg: float = float("nan")
+    mbt_coefficients: tuple[float, float, float] | None = None
+    fit_range_deg: tuple[float, float] | None = None
+
+
+def plot_sweep_overview(
+    series: Sequence[SweepPlotSeries],
+    *,
+    ca50_target_deg: float | None = None,
+    save_path: str | Path | None = None,
+    dpi: int = 300,
+) -> Figure:
+    """Spark-timing sweeps: IMEP vs spark timing (with MBT fit) and efficiency vs CA50.
+
+    Parameters
+    ----------
+    series : Sequence[SweepPlotSeries]
+        One entry per configuration.
+    ca50_target_deg : float | None
+        Matched CA50 [deg ATDC], drawn as a vertical line on the second panel.
+    save_path : str | Path | None
+        Output file path.
+    dpi : int, default=300
+        Export resolution.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Panel (a): gross IMEP [bar] against spark timing, quadratic MBT fit dashed and
+        MBT timing dotted. Panel (b): gross indicated efficiency [%] against CA50, or
+        gross IMEP when the fuel mass is unknown.
+    """
+    if not series:
+        raise ValueError("series must contain at least one configuration.")
+    use_eta = all(np.all(np.isfinite(s.efficiency)) for s in series)
+    with matplotlib.rc_context(_SAE_IEEE_RCPARAMS):
+        fig = Figure(figsize=(7.6, 6.2), dpi=dpi, constrained_layout=True)
+        ax_t = fig.add_subplot(2, 1, 1)
+        ax_c = fig.add_subplot(2, 1, 2)
+        for i, s in enumerate(series):
+            color = _PALETTE[i % len(_PALETTE)]
+            timing = np.asarray(s.ignition_timing_deg, dtype=np.float64)
+            if np.all(np.isfinite(timing)):
+                order = np.argsort(timing)
+                ax_t.plot(timing[order], np.asarray(s.imep_pa)[order] * 1.0e-5, "o-", color=color, lw=1.2,
+                          ms=4.0, label=s.label)
+                if s.mbt_coefficients is not None and s.fit_range_deg is not None:
+                    a, b, c = s.mbt_coefficients
+                    x = np.linspace(s.fit_range_deg[0], s.fit_range_deg[1], 100)
+                    ax_t.plot(x, (a + b * x + c * x**2) * 1.0e-5, "--", color=color, lw=1.0)
+                if np.isfinite(s.mbt_deg):
+                    ax_t.axvline(s.mbt_deg, color=color, ls=":", lw=1.0)
+            ca50 = np.asarray(s.ca50_deg, dtype=np.float64)
+            y = np.asarray(s.efficiency if use_eta else s.imep_pa, dtype=np.float64)
+            y = y * (100.0 if use_eta else 1.0e-5)
+            order = np.argsort(ca50)
+            ax_c.plot(ca50[order], y[order], "o-", color=color, lw=1.2, ms=4.0, label=s.label)
+        if ca50_target_deg is not None:
+            ax_c.axvline(ca50_target_deg, color="#555555", ls=":", lw=1.0)
+        ax_t.set_xlabel("Spark timing [deg ATDC]")
+        ax_t.set_ylabel("Gross IMEP [bar]")
+        if any(s.mbt_coefficients is not None for s in series):
+            ax_t.text(0.01, 0.04, "dashed: quadratic fit; dotted: MBT", transform=ax_t.transAxes, ha="left",
+                      va="bottom", fontsize=8.0, color="#555555")
+        ax_c.set_xlabel("CA50 [deg ATDC]")
+        ax_c.set_ylabel("Gross indicated efficiency [%]" if use_eta else "Gross IMEP [bar]")
+        for ax in (ax_t, ax_c):
+            ax.grid(True, lw=0.4, alpha=0.5)
+            ax.legend(loc="best")
+        return _finalize_and_save(fig, save_path, dpi)

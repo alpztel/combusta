@@ -83,6 +83,7 @@ def manufactured_cycle(
     wall_heat_loss_j: float = 0.0,
     theta_range_deg: tuple[float, float] = (-180.0, 180.0),
     resolution_deg: float = 0.5,
+    ignition_timing_deg: float | None = None,
 ) -> ManufacturedCycle:
     """Integrate a single-zone cycle with a prescribed Wiebe heat release.
 
@@ -114,6 +115,10 @@ def manufactured_cycle(
         Closed-cycle crank-angle range [deg ATDC].
     resolution_deg : float, default=0.5
         Output sample spacing [deg].
+    ignition_timing_deg : float | None, optional
+        Spark timing [deg ATDC] stored in the operating point. It does not drive the
+        burn law, which is set by ``combustion_start_deg`` and ``combustion_duration_deg``;
+        a synthetic spark sweep chooses both consistently (e.g. a fixed delay).
     """
     if not 0.0 < combustion_efficiency <= 1.0:
         raise PhysicalBoundsError("combustion_efficiency must lie in (0, 1].")
@@ -180,6 +185,7 @@ def manufactured_cycle(
             trapped_mass_kg=mass,
             intake_pressure_pa=p_ivc_pa,
             intake_temperature_k=t_ivc_k,
+            ignition_timing_deg=ignition_timing_deg,
         ),
         trace=CycleTrace(
             crank_angle_deg=theta,
@@ -214,6 +220,7 @@ def write_case_directory(
     fuel_key: str | None = None,
     wall_heat_loss_sign: float = 1.0,
     uncertainty: dict[str, float] | None = None,
+    configuration: str | None = None,
 ) -> Path:
     """Write ``case.toml`` and a trace CSV for a case; return the case-file path.
 
@@ -232,6 +239,8 @@ def write_case_directory(
         Target directory (created if needed).
     fuel_key : str | None
         Fuel name to write; defaults to ``case.operating_point.fuel.name``.
+    configuration : str | None
+        Configuration name for grouping sweep cases.
     """
     if wall_heat_loss_sign not in (1.0, -1.0):
         raise ValueError("wall_heat_loss_sign must be +1.0 or -1.0.")
@@ -271,6 +280,7 @@ def write_case_directory(
     toml = [
         f"name = {_toml_value(case.name)}",
         f"source = {_toml_value(case.source)}",
+        *([f"configuration = {_toml_value(configuration)}"] if configuration else []),
         "",
         "[geometry]",
         f"bore_m = {geo.bore_m!r}",

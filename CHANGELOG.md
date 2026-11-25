@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (matched comparison)
+- `combusta.sweep`: `build_sweep`, `metrics_at` (PCHIP interpolation to a target CA50 or spark timing, no extrapolation), `find_mbt` (quadratic least-squares vertex of gross IMEP with delta-method uncertainty), and `compare_matched` (configurations at matched CA50 or at their own MBT timing, with the significance test of `compare_cases`).
+- `configuration` key in `case.toml`; `combusta matched CASE ... (--ca50 DEG | --mbt)`; `write_matched_report` and `plot_sweep_overview`.
+- `ignition_timing` metric in cycle metrics; `manufactured_cycle(ignition_timing_deg=...)`.
+- `tests/test_13_matched_comparison.py`.
+- Documentation: matched comparison in the README (Section 9, quick start, verification table), `configuration` and `combusta matched` in `docs/case-file.md`, sweep planning in `docs/forte-output-checklist.md`, and `examples/matched_sweep_demo.py`.
+
 ### Added
 - **Case files** (`combusta.casefile`): `load_case` builds an `EngineCase` from a `case.toml` (geometry, operating point, fuel by name or as a table, trace file and format, column map, wall heat-loss sign, scalars, emissions, uncertainties, metadata). Unknown keys are rejected. The trace file's SHA-256 is recorded. Format reference in `docs/case-file.md`.
 - **Column mapping** for all readers: `ColumnSpec(column, unit)` and a `columns=` argument on `parse_thermo_csv`, `parse_spray_csv`, and `parse_dynamic_csv`; `inspect_columns` lists headers, units, and matched fields. Error messages name the available columns. Repeated headers get a numeric suffix instead of overwriting each other.

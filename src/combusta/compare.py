@@ -63,6 +63,7 @@ class MetricSpec:
 
 
 METRIC_SPECS: Final[Mapping[str, MetricSpec]] = {
+    "ignition_timing": MetricSpec("Spark timing / start of injection", "deg ATDC", 1.0),
     "p_max": MetricSpec("Peak cylinder pressure", "MPa", 1.0e-6),
     "theta_p_max": MetricSpec("Crank angle of peak pressure", "deg ATDC", 1.0),
     "max_prr": MetricSpec("Maximum pressure-rise rate", "bar/deg", 1.0e-5),
@@ -241,6 +242,7 @@ def compute_cycle_metrics(
 
     nan = float("nan")
     values: dict[str, float] = {
+        "ignition_timing": nan if op.ignition_timing_deg is None else float(op.ignition_timing_deg),
         "p_max": float(pressure[i_max]),
         "theta_p_max": _refined_peak_angle(theta, pressure, i_max),
         "max_prr": float(np.max(dp)),
@@ -420,53 +422,131 @@ class CaseComparison:
         Each non-baseline cell shows the value, the difference to the baseline, and a
         marker: ``*`` significant (|Δ| > U_Δ), ``~`` within numerical uncertainty.
         """
-        base = self.case_names[self.baseline_index]
-        header = ["Metric", "Unit"] + [
-            f"{n} (baseline)" if i == self.baseline_index else n for i, n in enumerate(self.case_names)
-        ]
-        lines = []
-        if self.contains_synthetic:
-            lines.append(
-                "> **Synthetic verification data** — not engineering results.\n"
-            )
-        lines.append("| " + " | ".join(header) + " |")
-        lines.append("|" + "---|" * len(header))
-        for r in self.rows:
-            cells = [r.label, r.display_unit]
-            for i, (v, d, s) in enumerate(zip(r.values, r.deltas, r.significant)):
-                if not math.isfinite(v):
-                    cells.append("–")
-                    continue
-                text = f"{v * r.si_to_display:.{digits}g}"
-                if i != self.baseline_index:
-                    mark = {True: " *", False: " ~", None: ""}[s]
-                    text += f" (Δ {d * r.si_to_display:+.{digits}g}{mark})"
-                cells.append(text)
-            lines.append("| " + " | ".join(cells) + " |")
-        lines.append("")
-        lines.append(f"Δ relative to **{base}**. `*` exceeds the combined numerical uncertainty, "
-                     "`~` lies within it; no marker means no uncertainty was supplied.")
-        return "\n".join(lines)
+        return rows_to_markdown(
+            self.case_names, self.baseline_index, self.rows, self.contains_synthetic, digits=digits
+        )
 
     def to_dataframe(self):  # noqa: ANN201 - pandas is an optional-at-call-time import
         """Return a tidy ``pandas.DataFrame`` (one row per metric and case, SI and display units)."""
-        import pandas as pd
+        return rows_to_dataframe(self.case_names, self.rows)
 
-        records = []
-        for r in self.rows:
-            for name, v, d, u, s in zip(self.case_names, r.values, r.deltas, r.uncertainties, r.significant):
-                records.append({
-                    "metric": r.key,
-                    "label": r.label,
-                    "case": name,
-                    "value_si": v,
-                    "delta_si": d,
-                    "uncertainty_si": u,
-                    "significant": s,
-                    "value_display": v * r.si_to_display,
-                    "display_unit": r.display_unit,
-                })
-        return pd.DataFrame.from_records(records)
+
+def rows_to_markdown(
+    case_names: Sequence[str],
+    baseline_index: int,
+    rows: Sequence[ComparisonRow],
+    contains_synthetic: bool,
+    *,
+    digits: int = 4,
+) -> str:
+    """Render comparison rows as a Markdown table (shared by all comparison types)."""
+    base = case_names[baseline_index]
+    header = ["Metric", "Unit"] + [
+        f"{n} (baseline)" if i == baseline_index else n for i, n in enumerate(case_names)
+    ]
+    lines = []
+    if contains_synthetic:
+        lines.append("> **Synthetic verification data** — not engineering results.\n")
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("|" + "---|" * len(header))
+    for r in rows:
+        cells = [r.label, r.display_unit]
+        for i, (v, d, s) in enumerate(zip(r.values, r.deltas, r.significant)):
+            if not math.isfinite(v):
+                cells.append("–")
+                continue
+            text = f"{v * r.si_to_display:.{digits}g}"
+            if i != baseline_index:
+                mark = {True: " *", False: " ~", None: ""}[s]
+                text += f" (Δ {d * r.si_to_display:+.{digits}g}{mark})"
+            cells.append(text)
+        lines.append("| " + " | ".join(cells) + " |")
+    lines.append("")
+    lines.append(f"Δ relative to **{base}**. `*` exceeds the combined numerical uncertainty, "
+                 "`~` lies within it; no marker means no uncertainty was supplied.")
+    return "\n".join(lines)
+
+
+def rows_to_dataframe(case_names: Sequence[str], rows: Sequence[ComparisonRow]):  # noqa: ANN201
+    """Tidy ``pandas.DataFrame`` of comparison rows (one row per metric and case)."""
+    import pandas as pd
+
+    records = []
+    for r in rows:
+        for name, v, d, u, s in zip(case_names, r.values, r.deltas, r.uncertainties, r.significant):
+            records.append({
+                "metric": r.key,
+                "label": r.label,
+                "case": name,
+                "value_si": v,
+                "delta_si": d,
+                "uncertainty_si": u,
+                "significant": s,
+                "value_display": v * r.si_to_display,
+                "display_unit": r.display_unit,
+            })
+    return pd.DataFrame.from_records(records)
+
+
+def build_comparison_rows(
+    case_names: Sequence[str],
+    values: Sequence[Mapping[str, float]],
+    baseline_index: int,
+    uncertainties: Sequence[Mapping[str, float]],
+    *,
+    scalar_units: Mapping[str, tuple[str, float]] | None = None,
+) -> tuple[ComparisonRow, ...]:
+    """Metric rows with baseline differences and the significance test $|\\Delta| > U_\\Delta$.
+
+    Parameters
+    ----------
+    case_names : Sequence[str]
+        Column labels.
+    values : Sequence[Mapping[str, float]]
+        Metric values [SI] per column.
+    baseline_index : int
+        Reference column.
+    uncertainties : Sequence[Mapping[str, float]]
+        Absolute uncertainty $U$ [SI] per column and metric (missing keys: no test).
+    scalar_units : Mapping[str, tuple[str, float]] | None
+        Display unit and factor for metrics without a :data:`METRIC_SPECS` entry.
+    """
+    keys = list(METRIC_SPECS)
+    keys += sorted({k for v in values for k in v} - set(METRIC_SPECS))
+    units = dict(scalar_units or {})
+    rows = []
+    for key in keys:
+        vals = tuple(float(v.get(key, float("nan"))) for v in values)
+        if not any(math.isfinite(v) for v in vals):
+            continue
+        spec = METRIC_SPECS.get(key) or _dynamic_spec(key)
+        if spec is None:
+            unit, factor = units.get(key, ("", 1.0))
+            spec = MetricSpec(key, unit, factor)
+        base_val = vals[baseline_index]
+        deltas = tuple(v - base_val for v in vals)
+        u_vals = tuple(u.get(key) for u in uncertainties)
+        u_base = u_vals[baseline_index]
+        significant: list[bool | None] = []
+        for i, (d, u) in enumerate(zip(deltas, u_vals)):
+            if i == baseline_index or u is None or u_base is None or not math.isfinite(d):
+                significant.append(None)
+            else:
+                significant.append(abs(d) > math.hypot(u, u_base))
+        rows.append(
+            ComparisonRow(
+                key=key,
+                label=spec.label,
+                display_unit=spec.display_unit,
+                si_to_display=spec.si_to_display,
+                baseline_value=base_val,
+                values=vals,
+                deltas=deltas,
+                uncertainties=u_vals,
+                significant=tuple(significant),
+            )
+        )
+    return tuple(rows)
 
 
 def compare_cases(
@@ -508,47 +588,18 @@ def compare_cases(
         raise KeyError(f"Uncertainties given for unknown cases: {sorted(unknown)}.")
 
     metrics = tuple(compute_cycle_metrics(c, **metric_kwargs) for c in cases)  # type: ignore[arg-type]
-    keys = list(METRIC_SPECS)
-    keys += sorted({k for m in metrics for k in m.values} - set(METRIC_SPECS))
-    units = dict(scalar_units or {})
-
-    rows = []
-    for key in keys:
-        vals = tuple(float(m.values.get(key, float("nan"))) for m in metrics)
-        if not any(math.isfinite(v) for v in vals):
-            continue
-        spec = METRIC_SPECS.get(key) or _dynamic_spec(key)
-        if spec is None:
-            unit, factor = units.get(key, ("", 1.0))
-            spec = MetricSpec(key, unit, factor)
-        base_val = vals[base_idx]
-        deltas = tuple(v - base_val for v in vals)
-        u_vals = tuple(unc.get(n, {}).get(key) for n in names)
-        u_base = u_vals[base_idx]
-        significant: list[bool | None] = []
-        for i, (d, u) in enumerate(zip(deltas, u_vals)):
-            if i == base_idx or u is None or u_base is None or not math.isfinite(d):
-                significant.append(None)
-            else:
-                significant.append(abs(d) > math.hypot(u, u_base))
-        rows.append(
-            ComparisonRow(
-                key=key,
-                label=spec.label,
-                display_unit=spec.display_unit,
-                si_to_display=spec.si_to_display,
-                baseline_value=base_val,
-                values=vals,
-                deltas=deltas,
-                uncertainties=u_vals,
-                significant=tuple(significant),
-            )
-        )
+    rows = build_comparison_rows(
+        names,
+        [m.values for m in metrics],
+        base_idx,
+        [unc.get(n, {}) for n in names],
+        scalar_units=scalar_units,
+    )
 
     return CaseComparison(
         case_names=names,
         baseline_index=base_idx,
         metrics=metrics,
-        rows=tuple(rows),
+        rows=rows,
         contains_synthetic=any(c.is_synthetic for c in cases),
     )

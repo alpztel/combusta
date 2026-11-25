@@ -82,7 +82,7 @@ FUEL_ALIASES: Final[Mapping[str, Fuel]] = {
 """Fuel names accepted by ``operating_point.fuel`` (case-insensitive)."""
 
 _TOP_LEVEL_KEYS: Final[frozenset[str]] = frozenset({
-    "name", "source", "description", "geometry", "operating_point", "trace",
+    "name", "source", "description", "configuration", "geometry", "operating_point", "trace",
     "scalars", "emissions_kg_per_cycle", "uncertainty", "metadata",
 })
 _TRACE_KEYS: Final[frozenset[str]] = frozenset({"file", "format", "wall_heat_loss_sign", "columns"})
@@ -104,6 +104,9 @@ class LoadedCase:
         Resolved path of the trace file.
     trace_sha256 : str
         SHA-256 digest of the trace file, so a report identifies its input exactly.
+    configuration : str | None
+        Engine configuration the case belongs to (``configuration`` key), used to group
+        the cases of a spark-timing sweep.
     """
 
     case: EngineCase
@@ -111,6 +114,7 @@ class LoadedCase:
     case_file: Path
     trace_file: Path
     trace_sha256: str
+    configuration: str | None = None
 
 
 def _table(data: Mapping[str, Any], key: str, where: str, *, required: bool) -> dict[str, Any]:
@@ -224,6 +228,9 @@ def load_case(path: str | Path) -> LoadedCase:
     name = data.get("name")
     if not isinstance(name, str) or not name.strip():
         raise CaseFileError(f"{where}: 'name' must be a non-empty string.")
+    configuration = data.get("configuration")
+    if configuration is not None and (not isinstance(configuration, str) or not configuration.strip()):
+        raise CaseFileError(f"{where}: 'configuration' must be a non-empty string.")
     source = data.get("source")
     if source not in ("cfd", "test_bench", "model_1d", "synthetic"):
         raise CaseFileError(
@@ -287,6 +294,8 @@ def load_case(path: str | Path) -> LoadedCase:
     metadata = {k: str(v) for k, v in metadata_table.items()}
     if isinstance(data.get("description"), str):
         metadata["description"] = data["description"]
+    if configuration is not None:
+        metadata["configuration"] = configuration.strip()
     digest = _sha256(trace_file)
     metadata.update({f"unit:{k}": v for k, v in units.items()})
     metadata.update({
@@ -324,4 +333,5 @@ def load_case(path: str | Path) -> LoadedCase:
         case_file=case_file,
         trace_file=trace_file,
         trace_sha256=digest,
+        configuration=None if configuration is None else configuration.strip(),
     )

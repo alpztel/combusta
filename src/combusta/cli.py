@@ -1,4 +1,4 @@
-"""Command-line interface: ``combusta inspect`` and ``combusta compare``.
+"""Command-line interface: ``combusta inspect``, ``combusta compare``, ``combusta matched``.
 
 ``combusta inspect FILE`` lists the columns of a CSV export, their units, and the
 canonical fields they are matched to; use it on the first file of a new format and
@@ -6,6 +6,10 @@ put the result into ``[trace.columns]`` of the case file.
 
 ``combusta compare CASE CASE [...]`` loads case files, compares them, and writes a
 Markdown report, a metrics CSV, and an overlay figure (see :mod:`combusta.report`).
+
+``combusta matched CASE ... (--ca50 DEG | --mbt)`` groups case files by their
+``configuration`` key into spark-timing sweeps and compares the configurations at
+matched CA50 or at their own MBT timing (see :mod:`combusta.sweep`).
 """
 
 from __future__ import annotations
@@ -59,6 +63,43 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _matched(args: argparse.Namespace) -> int:
+    from combusta.report import write_matched_report
+
+    baseline: int | str = args.baseline if args.baseline is not None else 0
+    report = write_matched_report(
+        args.cases,
+        args.out,
+        ca50_deg=args.ca50,
+        at_mbt=args.mbt,
+        baseline=baseline,
+        fit_points=args.fit_points,
+        figure=not args.no_figure,
+        combustion_window_deg=(float(args.combustion_window[0]), float(args.combustion_window[1])),
+        gross_window_deg=(float(args.gross_window[0]), float(args.gross_window[1])),
+        revolutions_per_cycle=int(args.revolutions),
+    )
+    print(report.comparison.to_markdown())
+    if report.warnings:
+        print("\nData checks:")
+        for w in report.warnings:
+            print(f"  - {w}")
+    print(f"\nWrote {report.report_path}, {report.metrics_path}"
+          + ("" if args.no_figure else f", {report.figure_path}"))
+    return 0
+
+
+def _add_analysis_options(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--baseline", help="Baseline name (default: the first).")
+    p.add_argument("--combustion-window", nargs=2, type=float, default=(-40.0, 90.0),
+                   metavar=("START", "END"), help="Burn-fraction window [deg ATDC].")
+    p.add_argument("--gross-window", nargs=2, type=float, default=(-180.0, 180.0),
+                   metavar=("START", "END"), help="Gross indicated work window [deg ATDC].")
+    p.add_argument("--revolutions", type=int, choices=(1, 2), default=2,
+                   help="Crank revolutions per cycle (2 = four-stroke).")
+    p.add_argument("--no-figure", action="store_true", help="Do not write the figure.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the argument parser of the ``combusta`` command."""
     from combusta import __version__
@@ -76,15 +117,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_compare = sub.add_parser("compare", help="Compare engine cases defined in case.toml files.")
     p_compare.add_argument("cases", nargs="+", type=Path, help="case.toml files or directories containing one.")
     p_compare.add_argument("--out", type=Path, default=Path("combusta_report"), help="Output directory.")
-    p_compare.add_argument("--baseline", help="Baseline case name (default: the first case).")
-    p_compare.add_argument("--combustion-window", nargs=2, type=float, default=(-40.0, 90.0),
-                           metavar=("START", "END"), help="Burn-fraction window [deg ATDC].")
-    p_compare.add_argument("--gross-window", nargs=2, type=float, default=(-180.0, 180.0),
-                           metavar=("START", "END"), help="Gross indicated work window [deg ATDC].")
-    p_compare.add_argument("--revolutions", type=int, choices=(1, 2), default=2,
-                           help="Crank revolutions per cycle (2 = four-stroke).")
-    p_compare.add_argument("--no-figure", action="store_true", help="Do not write the overlay figure.")
+    _add_analysis_options(p_compare)
     p_compare.set_defaults(func=_compare)
+
+    p_matched = sub.add_parser(
+        "matched",
+        help="Compare configurations (spark-timing sweeps) at matched CA50 or at MBT timing.",
+    )
+    p_matched.add_argument("cases", nargs="+", type=Path,
+                           help="case.toml files or directories; grouped by their 'configuration' key.")
+    mode = p_matched.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--ca50", type=float, metavar="DEG", help="Compare at this CA50 [deg ATDC].")
+    mode.add_argument("--mbt", action="store_true", help="Compare each configuration at its MBT timing.")
+    p_matched.add_argument("--fit-points", type=int, default=5,
+                           help="Sweep points around the IMEP maximum used for the MBT fit (default 5).")
+    p_matched.add_argument("--out", type=Path, default=Path("combusta_matched"), help="Output directory.")
+    _add_analysis_options(p_matched)
+    p_matched.set_defaults(func=_matched)
     return parser
 
 
@@ -99,6 +148,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if getattr(args, "command", None) == "compare" and len(args.cases) < 2:
         parser.error("compare needs at least two cases.")
+    if getattr(args, "command", None) == "matched" and len(args.cases) < 4:
+        parser.error("matched needs at least two configurations with two cases each.")
     try:
         return int(args.func(args))
     except (CombustaError, ValueError, KeyError, OSError) as exc:
