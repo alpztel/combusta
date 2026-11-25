@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Case files** (`combusta.casefile`): `load_case` builds an `EngineCase` from a `case.toml` (geometry, operating point, fuel by name or as a table, trace file and format, column map, wall heat-loss sign, scalars, emissions, uncertainties, metadata). Unknown keys are rejected. The trace file's SHA-256 is recorded. Format reference in `docs/case-file.md`.
+- **Column mapping** for all readers: `ColumnSpec(column, unit)` and a `columns=` argument on `parse_thermo_csv`, `parse_spray_csv`, and `parse_dynamic_csv`; `inspect_columns` lists headers, units, and matched fields. Error messages name the available columns. Repeated headers get a numeric suffix instead of overwriting each other.
+- `parse_trace_csv` (`combusta.io.trace_csv`): generic crank-angle table reader for test-bench and 1D-model data; only crank angle and pressure are required.
+- **Reports and command line**: `write_comparison_report` (`combusta.report`) and the `combusta` command with `inspect` and `compare`; the report contains provenance, data checks (volume consistency, missing inputs, unused uncertainty keys), the comparison table, analysis settings and notes, a metrics CSV, and a pressure / heat-release overlay (`plot_case_overlay`).
+- `combusta.synthetic`: `manufactured_cycle` (forward-integrated single-zone cycle with Wiebe heat release, composition-dependent gas properties, and optional wall heat loss) and `write_case_directory`, for testing an analysis chain before real data exist.
+- `docs/forte-output-checklist.md`: outputs a CFD run must write for case comparison, grid studies, and pre-chamber analysis.
+- `examples/make_example_cases.py` and two manufactured example cases in `examples/cases/`.
+- `tests/test_12_data_intake.py`.
+
+### Fixed
+- Without a temperature trace, `compute_cycle_metrics` reconstructed the temperature with the unburned gas constant. It now passes the trapped mass to `compute_heat_release(trapped_mass_kg=...)`, which evaluates $T = PV/(m R(x_b))$ inside the $x_b$ iteration. For hydrogen at λ = 2 the old behaviour overstated the gross heat release of a manufactured case by 0.4 %.
+
 ## [0.3.0] - 2026-11-25
 
 First release under the name **Combusta**. Versions 0.1.0 and 0.2.0 were published as `ice-cfd-validation-assistant`. This release has been verified against closed-form solutions and published reference data, but **not yet validated against engine or CFD measurements**.

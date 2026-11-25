@@ -66,6 +66,9 @@ dev = [
     "scipy-stubs>=1.14",
 ]
 
+[project.scripts]
+combusta = "combusta.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/alpztel/combusta"
 Repository = "https://github.com/alpztel/combusta.git"

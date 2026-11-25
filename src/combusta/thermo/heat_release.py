@@ -168,6 +168,7 @@ def compute_heat_release(
     max_property_iterations: int = 50,
     property_tolerance: float = 1.0e-9,
     derivative_method: DerivativeMethod = "auto",
+    trapped_mass_kg: float | None = None,
 ) -> HeatReleaseResult:
     """Compute single-zone Apparent & Gross Heat Release Rate (Heywood, 2018).
 
@@ -217,6 +218,13 @@ def compute_heat_release(
         Convergence threshold on $\\max|\\Delta x_b|$ [-].
     derivative_method : {"auto", "central4", "spline"}, default="auto"
         Numerical differentiation scheme for $dP/d\\theta$ (and $dV/d\\theta$ if needed).
+    trapped_mass_kg : float | None, optional
+        Trapped mass $m$ [kg]. Used only when ``temperature_k`` is ``None``: the gas
+        temperature is then reconstructed from the ideal-gas law $T = PV / (m R)$. With
+        ``burned_mixture`` the gas constant follows the composition,
+        $R = (1 - x_b) R_u + x_b R_b$, and $T$ is updated in every fixed-point
+        iteration. A constant unburned $R_u$ would bias $T$ when combustion changes the
+        number of moles, as it does for hydrogen (2 H2 + O2 -> 2 H2O, a 1/3 mole reduction).
 
     Returns
     -------
@@ -232,9 +240,25 @@ def compute_heat_release(
     if not (np.all(p_pa > 0.0) and np.all(v_m3 > 0.0)):
         raise PhysicalBoundsError("pressure_pa and volume_m3 must be finite and strictly positive.")
 
+    if trapped_mass_kg is not None:
+        if not np.isfinite(trapped_mass_kg) or trapped_mass_kg <= 0.0:
+            raise PhysicalBoundsError("trapped_mass_kg must be finite and > 0.")
+        if gamma is not None:
+            raise ValueError("trapped_mass_kg cannot be combined with an explicit gamma.")
+    temperature_from_mass = temperature_k is None and trapped_mass_kg is not None
+
+    def ideal_gas_temperature(r_specific: FloatArray | float) -> FloatArray:
+        assert trapped_mass_kg is not None
+        return np.asarray(p_pa * v_m3 / (trapped_mass_kg * r_specific), dtype=np.float64)
+
+    if temperature_from_mass:
+        temperature_k = ideal_gas_temperature(mixture.specific_gas_constant)
+
     if gamma is None:
         if temperature_k is None:
-            raise ValueError("Provide temperature_k for NASA gamma(T) or explicit gamma.")
+            raise ValueError(
+                "Provide temperature_k (or trapped_mass_kg) for NASA gamma(T), or explicit gamma."
+            )
         t_arr = np.asarray(temperature_k, dtype=np.float64)
         if t_arr.shape != theta.shape:
             raise ValueError("temperature_k must share the same shape as crank_angle_deg.")
@@ -287,8 +311,11 @@ def compute_heat_release(
         x_b = np.zeros_like(theta)
         converged = False
         change = float("inf")
+        r_u, r_b = mixture.specific_gas_constant, burned_mixture.specific_gas_constant
         while iterations < max_property_iterations:
             iterations += 1
+            if temperature_from_mass:
+                t_arr = ideal_gas_temperature((1.0 - x_b) * r_u + x_b * r_b)
             gamma_arr = blend_burned_unburned(t_arr, x_b, mixture, burned_mixture).gamma
             dq_net, dq_gross = first_law(gamma_arr)
             x_b_new = _mass_fraction_burned(theta, dq_gross, w_start, w_end)
@@ -302,6 +329,8 @@ def compute_heat_release(
                 f"x_b-dependent gamma did not converge within {max_property_iterations} "
                 f"iterations (last max|dx_b| = {change:.3e})."
             )
+        if temperature_from_mass:
+            t_arr = ideal_gas_temperature((1.0 - x_b) * r_u + x_b * r_b)
         gamma_arr = blend_burned_unburned(t_arr, x_b, mixture, burned_mixture).gamma
         dq_net, dq_gross = first_law(gamma_arr)
         x_b_result = x_b

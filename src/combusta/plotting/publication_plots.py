@@ -762,3 +762,86 @@ def plot_gci_convergence(
         ax.legend(loc=legend_loc, fontsize=7.9)
 
         return _finalize_and_save(fig, save_path, dpi)
+
+
+@dataclass(frozen=True, slots=True)
+class CaseOverlayTrace:
+    """One engine case for :func:`plot_case_overlay`.
+
+    Attributes
+    ----------
+    label : str
+        Legend label (case name).
+    theta_deg : NDArray[np.float64]
+        Crank angle $\theta$ [deg ATDC].
+    pressure_pa : NDArray[np.float64]
+        Cylinder pressure $P(\theta)$ [Pa].
+    hrr_result : HeatReleaseResult
+        Heat-release analysis of the case.
+    ca50_deg : float
+        CA50 [deg ATDC], ``nan`` if not available.
+    """
+
+    label: str
+    theta_deg: FloatArray
+    pressure_pa: FloatArray
+    hrr_result: HeatReleaseResult
+    ca50_deg: float = float("nan")
+
+
+def plot_case_overlay(
+    traces: Sequence[CaseOverlayTrace],
+    *,
+    theta_limits_deg: tuple[float, float] = (-40.0, 90.0),
+    title: str | None = None,
+    save_path: str | Path | None = None,
+    dpi: int = 300,
+) -> Figure:
+    """Overlay cylinder pressure and gross heat-release rate of several cases.
+
+    Parameters
+    ----------
+    traces : Sequence[CaseOverlayTrace]
+        Cases to overlay (at most five distinct colors; further cases reuse them dashed).
+    theta_limits_deg : tuple[float, float], default=(-40, 90)
+        Crank-angle window [deg ATDC].
+    title : str | None, optional
+        Figure title.
+    save_path : str | Path | None, optional
+        Output file path.
+    dpi : int, default=300
+        Export resolution.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Two-panel figure: pressure [bar] and gross heat-release rate [J/deg]; CA50 is
+        marked on the heat-release panel.
+    """
+    if not traces:
+        raise ValueError("traces must contain at least one case.")
+    with matplotlib.rc_context(_SAE_IEEE_RCPARAMS):
+        fig = Figure(figsize=(7.6, 6.2), dpi=dpi, constrained_layout=True)
+        ax_p = fig.add_subplot(2, 1, 1)
+        ax_q = fig.add_subplot(2, 1, 2, sharex=ax_p)
+        for i, tr in enumerate(traces):
+            color = _PALETTE[i % len(_PALETTE)]
+            style = "-" if i < len(_PALETTE) else "--"
+            ax_p.plot(tr.theta_deg, np.asarray(tr.pressure_pa) * 1.0e-5, color=color, ls=style, lw=1.6,
+                      label=tr.label)
+            ax_q.plot(tr.hrr_result.crank_angle_deg, tr.hrr_result.dq_gross_j_per_deg, color=color,
+                      ls=style, lw=1.6, label=tr.label)
+            if np.isfinite(tr.ca50_deg):
+                ax_q.axvline(tr.ca50_deg, color=color, ls=":", lw=1.0)
+        ax_p.set_ylabel("Cylinder pressure $P$ [bar]")
+        ax_q.set_ylabel("Gross heat-release rate [J/deg]")
+        ax_q.set_xlabel(r"Crank angle $\theta$ [deg ATDC]")
+        ax_q.set_xlim(*theta_limits_deg)
+        ax_p.legend(loc="upper right")
+        ax_q.text(0.99, 0.95, "dotted: CA50", transform=ax_q.transAxes, ha="right", va="top",
+                  fontsize=8.0, color="#555555")
+        if title:
+            ax_p.set_title(title)
+        for ax in (ax_p, ax_q):
+            ax.grid(True, lw=0.4, alpha=0.5)
+        return _finalize_and_save(fig, save_path, dpi)

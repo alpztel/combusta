@@ -76,7 +76,18 @@ Runtime dependencies are NumPy, SciPy, pandas, and Matplotlib. The `dev` extra a
 
 ## Quick start
 
-### Compare two engine configurations
+### From case files on the command line
+
+Each engine case is a directory with its trace file and a `case.toml` that states geometry, operating point, and how to read the trace ([format reference](docs/case-file.md)). Two manufactured example cases are included:
+
+```bash
+combusta inspect examples/cases/synthetic_slow_burn/thermo.csv
+combusta compare examples/cases/synthetic_slow_burn examples/cases/synthetic_fast_burn --out report
+```
+
+`inspect` lists the columns of an export, their units, and the field each is matched to. `compare` writes `report.md` (case provenance with the SHA-256 of every trace, data checks, the comparison table with significance against the declared uncertainties, analysis settings), `metrics.csv`, and a pressure / heat-release overlay. Before running simulations, read the [CFD output checklist](docs/forte-output-checklist.md): it lists the outputs the analysis needs, including those for a pre-chamber study.
+
+### Compare two engine configurations in Python
 
 ```python
 from combusta import (
@@ -134,16 +145,19 @@ print(result.summary())
 | Module | Content |
 | :--- | :--- |
 | `combusta.case` | `EngineCase`, `OperatingPoint`, `CycleTrace`; provenance (`cfd`, `test_bench`, `model_1d`, `synthetic`); Forte adapter; volume consistency check |
+| `combusta.casefile` | `load_case`: engine cases from `case.toml` files with strict key checking and trace provenance (SHA-256) |
 | `combusta.compare` | `compute_cycle_metrics`, `compare_cases`, `uncertainty_from_gci`; Markdown and pandas output |
+| `combusta.report`, `combusta.cli` | `write_comparison_report`; the `combusta inspect` and `combusta compare` commands |
+| `combusta.synthetic` | Manufactured cycles with known heat release (`manufactured_cycle`) and their case files, for testing a pipeline before real data exist |
 | `combusta.thermo` | Fuels and stoichiometry, NASA 7-coefficient polynomials, slider-crank kinematics, heat release, burn fractions, IMEP, Woschni and Hohenberg heat transfer, knock metrics, TDC phasing check |
 | `combusta.emissions` | Exhaust composition, ppm to mass (wet/dry), specific emissions, emission indices, combustion efficiency |
 | `combusta.vv` | Grid Convergence Index (`compute_gci`, `compute_grid_size`) and ASME V&V 20 validation (`validate` and uncertainty helpers) |
 | `combusta.signal` | Zero-phase Savitzky-Golay and Butterworth filtering; fourth-order and spline differentiation |
-| `combusta.io` | ANSYS Forte `thermo.csv`, `spray.csv`, `dynamic.csv` readers with unit detection; ECN spray data loader |
+| `combusta.io` | ANSYS Forte `thermo.csv`, `spray.csv`, `dynamic.csv` readers and a generic crank-angle table reader, with unit detection, explicit column mapping (`ColumnSpec`), and `inspect_columns`; ECN spray data loader |
 | `combusta.ignition` | Wolfer, Assanis et al. and Hardenberg-Hase ignition delay; Livengood-Wu integral; CFD ignition and two-stage heat-release detection |
 | `combusta.spray` | Hiroyasu-Arai and Naber-Siebers tip penetration; altitude density scaling; penetration error norms |
 | `combusta.exergy` | Dead state from the standard atmosphere; fuel chemical exergy; thermomechanical exergy; Gouy-Stodola destruction; cycle exergy budget |
-| `combusta.plotting` | Headless publication figures (cycle diagnostics, log P-V, spray, GCI) |
+| `combusta.plotting` | Headless publication figures (cycle diagnostics, case overlay, log P-V, spray, GCI) |
 | `combusta.constants` | Physical constants, unit conversion tables, ISO 2533 standard atmosphere |
 
 ## Mathematical formulation
@@ -221,6 +235,14 @@ x_b^{(k+1)}(\theta) = \frac{\displaystyle\int_{\theta_s}^{\theta} \frac{dQ_g}{d\
 \qquad
 \max_\theta \left| x_b^{(k+1)} - x_b^{(k)} \right| \le 10^{-9}
 ```
+
+When no temperature trace is available (typical for test-bench data), the temperature is reconstructed from the ideal-gas law with the trapped mass $`m`$ and a composition-dependent gas constant, updated in every iteration:
+
+```math
+T^{(k)}(\theta) = \frac{P\,V}{m\left[\big(1 - x_b^{(k)}\big) R_u + x_b^{(k)} R_b\right]}
+```
+
+A constant unburned $`R_u`$ would overestimate the post-combustion temperature when combustion reduces the number of moles; for hydrogen ($`2\,\mathrm{H_2} + \mathrm{O_2} \to 2\,\mathrm{H_2O}`$) at $`\lambda = 2`$ it overstates the gross heat release of the manufactured test case by 0.4 %.
 
 Burn fractions CA10, CA50 and CA90 are the roots of $`x_b(\theta) = 0.1, 0.5, 0.9`$ on a cubic-spline interpolant. Burn fractions are reported only if the window contains net heat release, $`\int dQ_g \ge 0.5 \int |dQ_g|`$; this plausibility threshold is a Combusta heuristic that prevents spurious CA50 values on motored or misfiring traces.
 
@@ -462,7 +484,9 @@ Verification checks that the equations are implemented correctly; it says nothin
 | `test_10_emissions_and_validation` | Exhaust mass equals fuel plus air mass; NIST molar masses; wet/dry conversion; combustion efficiency; Type A/B uncertainty; exactness of central differences for quadratic responses | NIST, JCGM 100:2008 |
 | `test_11_review_fixes` | Formal-order cap of the GCI; divergence warning; published Hardenberg-Hase form; unclipped thermomechanical exergy | Roache (1998) |
 
-At the time of writing, 144 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
+| `test_12_data_intake` | A manufactured hydrogen cycle written as a Forte-style file (MPa, cm<sup>3</sup>, negative heat-loss sign) and as a bench table (bar, no volume or temperature) gives the same metrics and its exact heat release (relative error < 2·10<sup>-4</sup>); composition-dependent temperature reconstruction; column mapping, case-file validation, report, and command line | Manufactured solution (Roache, 1998) |
+
+At the time of writing, 170 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
 
 ## Example: synthetic altitude sweep
 
@@ -503,7 +527,7 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 - **Knock.** MAPO and ringing intensity need a local pressure signal; spatially averaged CFD pressure removes the acoustic modes.
 - **GCI with adaptive meshing.** Adaptive mesh refinement is not a systematic refinement; a GCI computed from cell counts of AMR runs should be interpreted with care.
 - **Exergy.** The budget uses a single gas model of constant composition.
-- **Readers.** The ANSYS Forte readers were developed from documented column conventions and have not yet been tested on real exports; the sign of the wall heat-loss column must be checked on the first real case (`wall_heat_loss_sign`).
+- **Readers.** The ANSYS Forte readers recognize common header aliases but have not yet been tested on real exports. Unrecognized headers are mapped in the case file (`[trace.columns]`), and the sign of the wall heat-loss column must be checked on the first real case (`wall_heat_loss_sign`); see the [CFD output checklist](docs/forte-output-checklist.md).
 
 ## Roadmap
 

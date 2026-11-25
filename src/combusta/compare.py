@@ -189,8 +189,15 @@ def compute_cycle_metrics(
     if w_end <= w_start:
         raise ValueError("combustion_window_deg does not overlap the trace.")
 
-    temperature = case.temperature_k()
     dq_ht = case.trace.wall_heat_loss_j_per_deg
+    temperature: FloatArray | None
+    if case.trace.temperature_k is None and op.trapped_mass_kg is not None:
+        # T = PV/(m R(x_b)) is reconstructed inside the heat-release iteration rather
+        # than with the unburned gas constant of EngineCase.temperature_k().
+        temperature = None
+        notes.append("Temperature from the ideal-gas law with trapped mass and composition-dependent R.")
+    else:
+        temperature = case.temperature_k()
 
     def heat_release(burned_gas: NASAGasMixture | None) -> HeatReleaseResult:
         return compute_heat_release(
@@ -198,6 +205,7 @@ def compute_cycle_metrics(
             pressure,
             volume,
             temperature_k=temperature,
+            trapped_mass_kg=op.trapped_mass_kg if temperature is None else None,
             dv_dtheta_m3_per_deg=dv,
             dq_ht_j_per_deg=dq_ht,
             mixture=unburned,
