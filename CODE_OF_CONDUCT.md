@@ -1,6 +1,6 @@
 # Code of Conduct
 
-Combusta adopts the [Contributor Covenant, version 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/) as its code of conduct. The full text at that address applies to all project spaces (issues, pull requests, discussions, and reviews) and to anyone representing the project elsewhere.
+Combusta adopts the [Contributor Covenant, version 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/) as its code of conduct. The full text at that address applies to all project spaces (issues, pull requests, reviews, and commit messages) and to anyone representing the project elsewhere.
 
 ## In short
 
@@ -11,7 +11,7 @@ Combusta adopts the [Contributor Covenant, version 2.1](https://www.contributor-
 
 ## Reporting
 
-Report unacceptable behaviour privately to the maintainer, [@alpztel](https://github.com/alpztel). If you prefer not to write publicly, open a private report through the repository's [Security tab](https://github.com/alpztel/combusta/security/advisories/new) and mark it as a conduct report. Reports are handled confidentially.
+Report unacceptable behaviour to the maintainer, [@alpztel](https://github.com/alpztel). GitHub offers no private messages; to report privately, use the repository's [private reporting form](https://github.com/alpztel/combusta/security/advisories/new) and start the title with "Conduct:". Reports are handled confidentially, and the reporter's identity is not disclosed without consent.
 
 ## Enforcement
 
