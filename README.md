@@ -554,7 +554,7 @@ Verification checks that the equations are implemented correctly; it says nothin
 
 | `test_15_measurement_uncertainty` | Pegging offset leaves BDC-to-BDC IMEP unchanged and shifts peak pressure by the offset; gain scales IMEP and peak pressure exactly; TDC phasing shifts the angle of peak pressure by the error; IMEP sensitivity to phasing equals the integral of dP/dθ·dV/dθ; Monte Carlo standard deviation within 3 standard errors of linear propagation (M = 1000) | JCGM 100:2008, JCGM 101:2008 |
 
-At the time of writing, 221 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
+At the time of writing, 222 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
 
 ## Example: synthetic altitude sweep
 
