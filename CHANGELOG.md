@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (pre-chamber)
+- `combusta.prechamber`: isentropic orifice flow with choking (`orifice_mass_flow`, `critical_pressure_ratio`, `transfer_rate`), open-system apparent heat release with mass exchange (`zone_apparent_heat_release`), two-volume analysis `analyze_pre_chamber` (zone masses from exported masses, exported temperatures, or the orifice model integrated from the trapped mass), `pre_chamber_metrics` (pressure difference, jet start/end, jet mass, peak jet flow, choked share, heat release of both volumes and pre-chamber share, burn fractions), and `estimate_discharge_coefficient`.
+- `[pre_chamber]` table in case files (`PreChamberInput`), `combusta prechamber`, `write_pre_chamber_report`, `plot_pre_chamber`.
+- `manufactured_pre_chamber_cycle` and `write_pre_chamber_case_directory` for verification.
+- `tests/test_14_prechamber.py`.
+- Documentation: README Section 10 (later sections renumbered), Toulson et al. (2010) reference, case-file and checklist updates.
+
 ### Added (matched comparison)
 - `combusta.sweep`: `build_sweep`, `metrics_at` (PCHIP interpolation to a target CA50 or spark timing, no extrapolation), `find_mbt` (quadratic least-squares vertex of gross IMEP with delta-method uncertainty), and `compare_matched` (configurations at matched CA50 or at their own MBT timing, with the significance test of `compare_cases`).
 - `configuration` key in `case.toml`; `combusta matched CASE ... (--ca50 DEG | --mbt)`; `write_matched_report` and `plot_sweep_overview`.

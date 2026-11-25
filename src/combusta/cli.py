@@ -1,4 +1,4 @@
-"""Command-line interface: ``combusta inspect``, ``combusta compare``, ``combusta matched``.
+"""Command-line interface: ``combusta inspect``, ``compare``, ``matched``, and ``prechamber``.
 
 ``combusta inspect FILE`` lists the columns of a CSV export, their units, and the
 canonical fields they are matched to; use it on the first file of a new format and
@@ -10,6 +10,9 @@ Markdown report, a metrics CSV, and an overlay figure (see :mod:`combusta.report
 ``combusta matched CASE ... (--ca50 DEG | --mbt)`` groups case files by their
 ``configuration`` key into spark-timing sweeps and compares the configurations at
 matched CA50 or at their own MBT timing (see :mod:`combusta.sweep`).
+
+``combusta prechamber CASE`` runs the two-volume pre-chamber analysis of a case file
+with a ``[pre_chamber]`` table (see :mod:`combusta.prechamber`).
 """
 
 from __future__ import annotations
@@ -89,6 +92,20 @@ def _matched(args: argparse.Namespace) -> int:
     return 0
 
 
+def _prechamber(args: argparse.Namespace) -> int:
+    from combusta.report import write_pre_chamber_report
+
+    report = write_pre_chamber_report(
+        args.case, args.out,
+        window_deg=(float(args.window[0]), float(args.window[1])),
+        figure=not args.no_figure,
+    )
+    print(report.markdown)
+    print(f"\nWrote {report.report_path}, {report.metrics_path}"
+          + ("" if args.no_figure else f", {report.figure_path}"))
+    return 0
+
+
 def _add_analysis_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--baseline", help="Baseline name (default: the first).")
     p.add_argument("--combustion-window", nargs=2, type=float, default=(-40.0, 90.0),
@@ -134,6 +151,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_matched.add_argument("--out", type=Path, default=Path("combusta_matched"), help="Output directory.")
     _add_analysis_options(p_matched)
     p_matched.set_defaults(func=_matched)
+
+    p_pc = sub.add_parser("prechamber", help="Two-volume analysis of a case with a [pre_chamber] table.")
+    p_pc.add_argument("case", type=Path, help="case.toml or a directory containing one.")
+    p_pc.add_argument("--out", type=Path, default=Path("combusta_prechamber"), help="Output directory.")
+    p_pc.add_argument("--window", nargs=2, type=float, default=(-40.0, 90.0), metavar=("START", "END"),
+                      help="Analysis window [deg ATDC].")
+    p_pc.add_argument("--no-figure", action="store_true", help="Do not write the figure.")
+    p_pc.set_defaults(func=_prechamber)
     return parser
 
 

@@ -33,7 +33,7 @@ Adaptive mesh refinement does not give a systematic refinement by itself; keep t
 
 ## 3. Pre-chamber (turbulent jet ignition) cases
 
-The pre-chamber analysis planned for Combusta 0.4 treats the pre-chamber and the main chamber as two control volumes connected by the orifices. It needs, **separately for each volume**:
+The pre-chamber analysis (`combusta prechamber`, `[pre_chamber]` in [case-file.md](case-file.md)) treats the pre-chamber and the main chamber as two control volumes connected by the orifices. It needs, **separately for each volume**:
 
 | Quantity | Why |
 | :--- | :--- |
@@ -44,7 +44,9 @@ The pre-chamber analysis planned for Combusta 0.4 treats the pre-chamber and the
 | Heat-release rate and wall heat transfer, if the solver can report them per region | Cross-check and gross heat release per volume |
 | Mass flow rate through the orifices, if available | Direct check of the orifice flow model |
 
-If the pre-chamber is not defined as a separate region or monitor volume in the setup, its pressure cannot be recovered afterwards from cylinder averages. Record the orifice number, diameter, and length in the case metadata.
+If the pre-chamber is not defined as a separate region or monitor volume in the setup, its pressure cannot be recovered afterwards from cylinder averages. Record the orifice number and diameter in `[pre_chamber]` and the orifice length in `[metadata]`.
+
+The main-chamber trace must exclude the pre-chamber volume. If only a whole-cylinder average (main chamber plus pre-chamber) is available, the two-volume analysis cannot be applied to it. With exported zone temperatures or masses, the report also fits an effective discharge coefficient to the solver's mass exchange, which is a useful check of the $C_D$ declared in the case file.
 
 ## 4. Simulation plan for a fair comparison
 

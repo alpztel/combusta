@@ -44,12 +44,16 @@ import hashlib
 import math
 from pathlib import Path
 import tomllib
-from typing import Any, Final
+from typing import Any, Final, TypeAlias
+
+import numpy as np
+from numpy.typing import NDArray
 
 from combusta.case import CycleTrace, EngineCase, OperatingPoint
 from combusta.exceptions import CaseFileError, CombustaError
 from combusta.io.forte_parser import THERMO_FIELDS, ColumnSpec, parse_thermo_csv
 from combusta.io.trace_csv import TRACE_FIELDS, parse_trace_csv
+from combusta.prechamber import PreChamberGeometry
 from combusta.thermo.fuels import (
     DIESEL_SURROGATE,
     FUEL_LIBRARY,
@@ -61,6 +65,8 @@ from combusta.thermo.fuels import (
     Fuel,
 )
 from combusta.thermo.kinematics import SliderCrankGeometry
+
+FloatArray: TypeAlias = NDArray[np.float64]
 
 CASE_FILE_NAME: Final[str] = "case.toml"
 """File name looked up when a directory is given instead of a case file."""
@@ -83,9 +89,40 @@ FUEL_ALIASES: Final[Mapping[str, Fuel]] = {
 
 _TOP_LEVEL_KEYS: Final[frozenset[str]] = frozenset({
     "name", "source", "description", "configuration", "geometry", "operating_point", "trace",
-    "scalars", "emissions_kg_per_cycle", "uncertainty", "metadata",
+    "scalars", "emissions_kg_per_cycle", "uncertainty", "metadata", "pre_chamber",
 })
 _TRACE_KEYS: Final[frozenset[str]] = frozenset({"file", "format", "wall_heat_loss_sign", "columns"})
+_PRE_CHAMBER_KEYS: Final[frozenset[str]] = frozenset({
+    "volume_m3", "orifice_count", "orifice_diameter_m", "discharge_coefficient", "file", "columns",
+})
+
+
+@dataclass(frozen=True, slots=True)
+class PreChamberInput:
+    """Pre-chamber geometry and signals from the ``[pre_chamber]`` table of a case file.
+
+    Attributes
+    ----------
+    geometry : PreChamberGeometry
+        Volume and orifices.
+    pressure_pa : NDArray[np.float64]
+        Pre-chamber pressure on the case's crank-angle grid [Pa].
+    temperature_k : NDArray[np.float64] | None
+        Pre-chamber temperature [K], if exported.
+    wall_heat_loss_j_per_deg : NDArray[np.float64] | None
+        Pre-chamber wall heat loss [J/deg] in the Combusta sign convention, if exported.
+    file : Path
+        File the signals were read from.
+    sha256 : str
+        SHA-256 digest of that file.
+    """
+
+    geometry: PreChamberGeometry
+    pressure_pa: FloatArray
+    temperature_k: FloatArray | None
+    wall_heat_loss_j_per_deg: FloatArray | None
+    file: Path
+    sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +144,9 @@ class LoadedCase:
     configuration : str | None
         Engine configuration the case belongs to (``configuration`` key), used to group
         the cases of a spark-timing sweep.
+    pre_chamber : PreChamberInput | None
+        Pre-chamber data from ``[pre_chamber]``; the case trace then describes the main
+        chamber only.
     """
 
     case: EngineCase
@@ -115,6 +155,7 @@ class LoadedCase:
     trace_file: Path
     trace_sha256: str
     configuration: str | None = None
+    pre_chamber: PreChamberInput | None = None
 
 
 def _table(data: Mapping[str, Any], key: str, where: str, *, required: bool) -> dict[str, Any]:
@@ -327,6 +368,15 @@ def load_case(path: str | Path) -> LoadedCase:
     except (ValueError, CombustaError) as exc:
         raise CaseFileError(f"{where}: {exc}") from exc
 
+    pre_chamber = _pre_chamber(data, where, case_file, trace_file, theta, sign)
+    if pre_chamber is not None:
+        metadata_extra = {"pre_chamber_file": str(pre_chamber.file), "pre_chamber_sha256": pre_chamber.sha256}
+        case = EngineCase(
+            name=case.name, geometry=case.geometry, operating_point=case.operating_point, trace=case.trace,
+            source=case.source, scalars=case.scalars, emissions_kg_per_cycle=case.emissions_kg_per_cycle,
+            metadata={**case.metadata, **metadata_extra},
+        )
+
     return LoadedCase(
         case=case,
         uncertainties=uncertainties,
@@ -334,4 +384,62 @@ def load_case(path: str | Path) -> LoadedCase:
         trace_file=trace_file,
         trace_sha256=digest,
         configuration=None if configuration is None else configuration.strip(),
+        pre_chamber=pre_chamber,
+    )
+
+
+def _pre_chamber(
+    data: Mapping[str, Any],
+    where: str,
+    case_file: Path,
+    trace_file: Path,
+    theta: FloatArray,
+    sign: float,
+) -> PreChamberInput | None:
+    """Read the optional ``[pre_chamber]`` table and its signals onto the case grid."""
+    table = _table(data, "pre_chamber", where, required=False)
+    if not table:
+        return None
+    pc_where = f"{where} [pre_chamber]"
+    _check_keys(table, _PRE_CHAMBER_KEYS, pc_where)
+    geo_values = {k: table[k] for k in ("volume_m3", "orifice_count", "orifice_diameter_m", "discharge_coefficient")
+                  if k in table}
+    if isinstance(geo_values.get("orifice_count"), float) and float(geo_values["orifice_count"]).is_integer():
+        geo_values["orifice_count"] = int(geo_values["orifice_count"])
+    geometry = _build(PreChamberGeometry, geo_values, pc_where)
+    rel = table.get("file")
+    pc_file = trace_file if rel is None else (case_file.parent / str(rel)).resolve()
+    if not pc_file.is_file():
+        raise CaseFileError(f"{pc_where}: file not found: {pc_file}")
+    columns = _column_map(_table(table, "columns", pc_where, required=False), TRACE_FIELDS, f"{pc_where}.columns")
+    if pc_file == trace_file and "pressure" not in columns:
+        raise CaseFileError(
+            f"{pc_where}: the pre-chamber signals come from the trace file, so "
+            "[pre_chamber.columns] must name the pre-chamber pressure column explicitly."
+        )
+    signals = parse_trace_csv(pc_file, columns=columns)
+    th = signals.crank_angle_deg
+    if th[0] > theta[0] + 1e-9 or th[-1] < theta[-1] - 1e-9:
+        raise CaseFileError(
+            f"{pc_where}: pre-chamber signals cover [{th[0]:g}, {th[-1]:g}] deg but the case trace "
+            f"covers [{theta[0]:g}, {theta[-1]:g}] deg."
+        )
+
+    def on_grid(values: FloatArray | None) -> FloatArray | None:
+        if values is None:
+            return None
+        if th.shape == theta.shape and np.allclose(th, theta, rtol=0.0, atol=1e-9):
+            return values
+        return np.asarray(np.interp(theta, th, values), dtype=np.float64)
+
+    pressure = on_grid(signals.pressure_pa)
+    assert pressure is not None
+    wall = on_grid(signals.wall_heat_loss_j_per_deg)
+    return PreChamberInput(
+        geometry=geometry,
+        pressure_pa=pressure,
+        temperature_k=on_grid(signals.temperature_k),
+        wall_heat_loss_j_per_deg=None if wall is None else sign * wall,
+        file=pc_file,
+        sha256=_sha256(pc_file),
     )

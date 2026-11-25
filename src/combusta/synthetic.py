@@ -30,6 +30,7 @@ from scipy.integrate import solve_ivp
 
 from combusta.case import CycleTrace, EngineCase, OperatingPoint
 from combusta.exceptions import PhysicalBoundsError
+from combusta.prechamber import PreChamberGeometry, transfer_rate
 from combusta.thermo.fuels import Fuel, blend_burned_unburned, make_product_mixture, make_reactant_mixture
 from combusta.thermo.kinematics import SliderCrankGeometry
 
@@ -310,4 +311,207 @@ def write_case_directory(
         toml += ["", "[metadata]"] + [f"{_toml_value(k)} = {_toml_value(v)}" for k, v in case.metadata.items()]
     path = out / "case.toml"
     path.write_text("\n".join(toml) + "\n", encoding="utf-8")
+    return path
+
+
+@dataclass(frozen=True, slots=True)
+class ManufacturedPreChamberCycle:
+    """A manufactured two-volume pre-chamber cycle with its exact heat release.
+
+    All arrays share ``crank_angle_deg``. Heat-release rates are those prescribed in
+    the forward integration [J/deg]; ``transfer_rate_kg_per_deg`` is the orifice mass
+    transfer from pre-chamber to main chamber [kg/deg].
+    """
+
+    crank_angle_deg: FloatArray
+    pre_chamber_pressure_pa: FloatArray
+    main_chamber_pressure_pa: FloatArray
+    main_chamber_volume_m3: FloatArray
+    main_chamber_dv_dtheta_m3_per_deg: FloatArray
+    pre_chamber_mass_kg: FloatArray
+    main_chamber_mass_kg: FloatArray
+    pre_chamber_temperature_k: FloatArray
+    main_chamber_temperature_k: FloatArray
+    transfer_rate_kg_per_deg: FloatArray
+    dq_pc_j_per_deg: FloatArray
+    dq_mc_j_per_deg: FloatArray
+    q_pc_total_j: float
+    q_mc_total_j: float
+    trapped_mass_kg: float
+    rpm: float
+
+
+def manufactured_pre_chamber_cycle(
+    geometry: SliderCrankGeometry,
+    pre_chamber: PreChamberGeometry,
+    fuel: Fuel,
+    *,
+    lambda_air: float,
+    rpm: float,
+    p_ivc_pa: float = 1.0e5,
+    t_ivc_k: float = 330.0,
+    pc_energy_fraction: float | None = None,
+    pc_start_deg: float = -18.0,
+    pc_duration_deg: float = 15.0,
+    mc_start_deg: float = -8.0,
+    mc_duration_deg: float = 30.0,
+    theta_range_deg: tuple[float, float] = (-180.0, 180.0),
+    resolution_deg: float = 0.25,
+) -> ManufacturedPreChamberCycle:
+    """Integrate a two-volume cycle with prescribed Wiebe heat release in each volume.
+
+    The geometry describes the main chamber; the pre-chamber volume is added to it.
+    Both volumes use the unburned-charge gas model of ``fuel`` at ``lambda_air`` (frozen
+    composition, the same assumption as :func:`combusta.prechamber.analyze_pre_chamber`),
+    and exchange mass through the orifice model of :mod:`combusta.prechamber`. A fraction
+    ``pc_energy_fraction`` of the fuel energy is released in the pre-chamber; by default
+    the pre-chamber share of the charge at top dead centre for a uniform temperature,
+    V_pc / (V_pc + V_c), with V_c the main-chamber clearance volume. The result is a
+    manufactured solution for code verification, not a model of a real engine.
+    """
+    if pc_energy_fraction is None:
+        v_c = geometry.displaced_volume_m3 / (geometry.compression_ratio - 1.0)
+        pc_energy_fraction = pre_chamber.volume_m3 / (pre_chamber.volume_m3 + v_c)
+    if not 0.0 < pc_energy_fraction < 1.0:
+        raise PhysicalBoundsError("pc_energy_fraction must lie in (0, 1).")
+    theta = np.arange(theta_range_deg[0], theta_range_deg[1] + 0.5 * resolution_deg, resolution_deg)
+    kin = geometry.evaluate(theta)
+    mix = make_reactant_mixture(fuel, lambda_air)
+    r = mix.specific_gas_constant
+    v_pc = pre_chamber.volume_m3
+    m_total = p_ivc_pa * (float(kin.volume_m3[0]) + v_pc) / (r * t_ivc_k)
+    m_pc0 = p_ivc_pa * v_pc / (r * t_ivc_k)
+    fuel_mass = m_total / (1.0 + lambda_air * fuel.stoichiometric_afr)
+    q_total = fuel_mass * fuel.lhv_j_per_kg
+    q_pc, q_mc = pc_energy_fraction * q_total, (1.0 - pc_energy_fraction) * q_total
+    a = WIEBE_EFFICIENCY_A
+    norm = 1.0 - math.exp(-a)
+
+    def wiebe_rate(th: float, start: float, dur: float, total: float) -> float:
+        u = (th - start) / dur
+        if u <= 0.0 or u >= 1.0:
+            return 0.0
+        return total * a * 3.0 / dur * u**2 * math.exp(-a * u**3) / norm
+
+    def rhs(th: float, y: FloatArray) -> list[float]:
+        p_pc, p_mc, m_pc = float(y[0]), float(y[1]), float(y[2])
+        k = geometry.evaluate(np.array([th]))
+        v_mc, dv = float(k.volume_m3[0]), float(k.dv_dtheta_m3_per_deg[0])
+        m_mc = m_total - m_pc
+        t_pc, t_mc = p_pc * v_pc / (m_pc * r), p_mc * v_mc / (m_mc * r)
+        x = float(transfer_rate(p_pc, t_pc, p_mc, t_mc, mixture_pc=mix, mixture_mc=mix,
+                                geometry=pre_chamber, rpm=rpm))
+        h_flow = float(mix.enthalpy(t_pc if x >= 0.0 else t_mc))
+        g_pc, g_mc = float(mix.gamma(t_pc)), float(mix.gamma(t_mc))
+        b_pc = float(mix.internal_energy(t_pc) - mix.cv(t_pc) * t_pc) - h_flow
+        b_mc = float(mix.internal_energy(t_mc) - mix.cv(t_mc) * t_mc) - h_flow
+        dq_pc = wiebe_rate(th, pc_start_deg, pc_duration_deg, q_pc)
+        dq_mc = wiebe_rate(th, mc_start_deg, mc_duration_deg, q_mc)
+        dp_pc = (g_pc - 1.0) / v_pc * (dq_pc - b_pc * (-x))
+        dp_mc = (g_mc - 1.0) / v_mc * (dq_mc - g_mc / (g_mc - 1.0) * p_mc * dv - b_mc * x)
+        return [dp_pc, dp_mc, -x]
+
+    sol = solve_ivp(rhs, (float(theta[0]), float(theta[-1])), [p_ivc_pa, p_ivc_pa, m_pc0],
+                    t_eval=theta, method="LSODA", rtol=1e-10, atol=[1e-4, 1e-4, 1e-15], max_step=0.05)
+    if not sol.success:  # pragma: no cover
+        raise RuntimeError(f"Forward integration failed: {sol.message}")
+    p_pc, p_mc, m_pc = (np.asarray(sol.y[i], dtype=np.float64) for i in range(3))
+    m_mc = m_total - m_pc
+    t_pc = p_pc * v_pc / (m_pc * r)
+    t_mc = p_mc * kin.volume_m3 / (m_mc * r)
+    x = transfer_rate(p_pc, t_pc, p_mc, t_mc, mixture_pc=mix, mixture_mc=mix, geometry=pre_chamber, rpm=rpm)
+    dq_pc = np.array([wiebe_rate(float(t), pc_start_deg, pc_duration_deg, q_pc) for t in theta])
+    dq_mc = np.array([wiebe_rate(float(t), mc_start_deg, mc_duration_deg, q_mc) for t in theta])
+    return ManufacturedPreChamberCycle(
+        crank_angle_deg=theta,
+        pre_chamber_pressure_pa=p_pc,
+        main_chamber_pressure_pa=p_mc,
+        main_chamber_volume_m3=kin.volume_m3,
+        main_chamber_dv_dtheta_m3_per_deg=kin.dv_dtheta_m3_per_deg,
+        pre_chamber_mass_kg=m_pc,
+        main_chamber_mass_kg=m_mc,
+        pre_chamber_temperature_k=t_pc,
+        main_chamber_temperature_k=t_mc,
+        transfer_rate_kg_per_deg=x,
+        dq_pc_j_per_deg=dq_pc,
+        dq_mc_j_per_deg=dq_mc,
+        q_pc_total_j=q_pc,
+        q_mc_total_j=q_mc,
+        trapped_mass_kg=m_total,
+        rpm=rpm,
+    )
+
+
+def write_pre_chamber_case_directory(
+    cycle: ManufacturedPreChamberCycle,
+    geometry: SliderCrankGeometry,
+    pre_chamber: PreChamberGeometry,
+    directory: str | Path,
+    *,
+    name: str,
+    fuel_key: str,
+    lambda_air: float,
+    include_temperatures: bool = True,
+    configuration: str | None = None,
+) -> Path:
+    """Write a manufactured pre-chamber cycle as ``case.toml``, ``thermo.csv``, and ``prechamber.csv``.
+
+    ``thermo.csv`` holds the main chamber (crank angle, pressure in MPa, volume in cm^3,
+    and optionally temperature), ``prechamber.csv`` the pre-chamber (crank angle,
+    pressure in bar, optionally temperature). Without temperatures the analysis uses
+    the orifice model with the trapped mass written to the case file.
+    """
+    out = Path(directory)
+    out.mkdir(parents=True, exist_ok=True)
+    th = cycle.crank_angle_deg
+    main_cols = ["Crank Angle [deg]", "Pressure [MPa]", "Volume [cm^3]"]
+    main_data = [th, cycle.main_chamber_pressure_pa * 1e-6, cycle.main_chamber_volume_m3 * 1e6]
+    pc_cols = ["Crank Angle [deg]", "PC Pressure [bar]"]
+    pc_data = [th, cycle.pre_chamber_pressure_pa * 1e-5]
+    if include_temperatures:
+        main_cols.append("Temperature [K]")
+        main_data.append(cycle.main_chamber_temperature_k)
+        pc_cols.append("PC Temperature [K]")
+        pc_data.append(cycle.pre_chamber_temperature_k)
+    for fname, cols, data in (("thermo.csv", main_cols, main_data), ("prechamber.csv", pc_cols, pc_data)):
+        rows = [",".join(cols)] + [",".join(f"{v:.12g}" for v in row) for row in np.column_stack(data)]
+        (out / fname).write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
+
+    toml = [
+        f"name = {_toml_value(name)}",
+        'source = "synthetic"',
+        *([f"configuration = {_toml_value(configuration)}"] if configuration else []),
+        "",
+        "[geometry]",
+        f"bore_m = {geometry.bore_m!r}",
+        f"stroke_m = {geometry.stroke_m!r}",
+        f"conrod_m = {geometry.conrod_m!r}",
+        f"compression_ratio = {geometry.compression_ratio!r}",
+        "",
+        "[operating_point]",
+        f"rpm = {float(cycle.rpm)!r}",
+        f"fuel = {_toml_value(fuel_key)}",
+        f"lambda_air = {float(lambda_air)!r}",
+        f"trapped_mass_kg = {cycle.trapped_mass_kg!r}",
+        "",
+        "[trace]",
+        'file = "thermo.csv"',
+        'format = "forte_thermo"',
+        "",
+        "[pre_chamber]",
+        f"volume_m3 = {pre_chamber.volume_m3!r}",
+        f"orifice_count = {pre_chamber.orifice_count}",
+        f"orifice_diameter_m = {pre_chamber.orifice_diameter_m!r}",
+        f"discharge_coefficient = {pre_chamber.discharge_coefficient!r}",
+        'file = "prechamber.csv"',
+        "",
+        "[pre_chamber.columns]",
+        'pressure = "PC Pressure"',
+        *(['temperature = "PC Temperature"'] if include_temperatures else []),
+        "",
+        "[metadata]",
+        '"generator" = "combusta.synthetic.manufactured_pre_chamber_cycle"',
+    ]
+    path = out / "case.toml"
+    path.write_text("\n".join(toml) + "\n", encoding="utf-8", newline="\n")
     return path

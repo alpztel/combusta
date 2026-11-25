@@ -946,3 +946,82 @@ def plot_sweep_overview(
             ax.grid(True, lw=0.4, alpha=0.5)
             ax.legend(loc="best")
         return _finalize_and_save(fig, save_path, dpi)
+
+
+def plot_pre_chamber(
+    theta_deg: FloatArray,
+    pre_chamber_pressure_pa: FloatArray,
+    main_chamber_pressure_pa: FloatArray,
+    transfer_rate_kg_per_s: FloatArray,
+    dq_pc_j_per_deg: FloatArray,
+    dq_mc_j_per_deg: FloatArray,
+    *,
+    jet_window_deg: tuple[float, float] | None = None,
+    theta_limits_deg: tuple[float, float] = (-40.0, 60.0),
+    title: str | None = None,
+    save_path: str | Path | None = None,
+    dpi: int = 300,
+) -> Figure:
+    """Three-panel pre-chamber diagnostic: pressures, pressure difference and mass flow, heat release.
+
+    Parameters
+    ----------
+    theta_deg : NDArray[np.float64]
+        Crank angle [deg ATDC].
+    pre_chamber_pressure_pa, main_chamber_pressure_pa : NDArray[np.float64]
+        Zone pressures [Pa].
+    transfer_rate_kg_per_s : NDArray[np.float64]
+        Orifice mass flow, positive from pre-chamber to main chamber [kg/s].
+    dq_pc_j_per_deg, dq_mc_j_per_deg : NDArray[np.float64]
+        Gross heat-release rates of the zones [J/deg].
+    jet_window_deg : tuple[float, float] | None
+        Jet start and end [deg ATDC], shaded when given.
+    theta_limits_deg : tuple[float, float], default=(-40, 60)
+        Crank-angle window [deg ATDC].
+    title : str | None
+        Figure title.
+    save_path : str | Path | None
+        Output file path.
+    dpi : int, default=300
+        Export resolution.
+    """
+    with matplotlib.rc_context(_SAE_IEEE_RCPARAMS):
+        fig = Figure(figsize=(7.6, 8.0), dpi=dpi, constrained_layout=True)
+        ax_p = fig.add_subplot(3, 1, 1)
+        ax_d = fig.add_subplot(3, 1, 2, sharex=ax_p)
+        ax_q = fig.add_subplot(3, 1, 3, sharex=ax_p)
+        ax_p.plot(theta_deg, np.asarray(pre_chamber_pressure_pa) * 1e-5, color=_PALETTE[2], lw=1.6, label="pre-chamber")
+        ax_p.plot(theta_deg, np.asarray(main_chamber_pressure_pa) * 1e-5, color=_PALETTE[0], lw=1.6, label="main chamber")
+        ax_p.set_ylabel("Pressure [bar]")
+        ax_p.legend(loc="upper right")
+        dp = (np.asarray(pre_chamber_pressure_pa) - np.asarray(main_chamber_pressure_pa)) * 1e-5
+        ax_d.plot(theta_deg, dp, color=_PALETTE[2], lw=1.6, label=r"$\Delta p = p_{pc} - p_{mc}$")
+        ax_d.axhline(0.0, color="#555555", lw=0.8)
+        ax_d.set_ylabel(r"$\Delta p$ [bar]")
+        ax_m = ax_d.twinx()
+        ax_m.plot(theta_deg, np.asarray(transfer_rate_kg_per_s) * 1e3, color=_PALETTE[3], lw=1.2, ls="--",
+                  label="orifice mass flow")
+        ax_m.set_ylabel(r"Mass flow pc $\to$ mc [g/s]")
+        # Align the zero lines of both axes.
+        d_lo, d_hi = ax_d.get_ylim()
+        m_lo, m_hi = ax_m.get_ylim()
+        if d_hi > 0.0 and m_hi > 0.0:
+            f = max(-d_lo / d_hi, -m_lo / m_hi, 0.0)
+            ax_d.set_ylim(-f * d_hi, d_hi)
+            ax_m.set_ylim(-f * m_hi, m_hi)
+        lines = ax_d.get_lines()[:1] + ax_m.get_lines()
+        ax_d.legend(lines, [str(ln.get_label()) for ln in lines], loc="upper right")
+        ax_q.plot(theta_deg, dq_pc_j_per_deg, color=_PALETTE[2], lw=1.6, label="pre-chamber")
+        ax_q.plot(theta_deg, dq_mc_j_per_deg, color=_PALETTE[0], lw=1.6, label="main chamber")
+        ax_q.set_ylabel("Gross heat-release rate [J/deg]")
+        ax_q.set_xlabel(r"Crank angle $\theta$ [deg ATDC]")
+        ax_q.legend(loc="upper right")
+        ax_q.set_xlim(*theta_limits_deg)
+        if jet_window_deg is not None and all(np.isfinite(jet_window_deg)):
+            for ax in (ax_p, ax_d, ax_q):
+                ax.axvspan(jet_window_deg[0], jet_window_deg[1], color="#DDAA33", alpha=0.12, lw=0)
+        if title:
+            ax_p.set_title(title)
+        for ax in (ax_p, ax_d, ax_q):
+            ax.grid(True, lw=0.4, alpha=0.5)
+        return _finalize_and_save(fig, save_path, dpi)
