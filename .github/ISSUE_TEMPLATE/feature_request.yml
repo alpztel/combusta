@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose a new analysis, model, reader, or output.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Engineering need
+      description: What analysis do you want to perform, and on which data (CFD, test bench, 1-D model)?
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method and literature
+      description: The model or procedure and its primary source. New models are accepted only with a citable source and a verification test.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: How could it be verified?
+      description: Closed-form limit, manufactured solution, or published reference data.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "combusta"
-version = "0.3.0.dev0"
+version = "0.3.0"
 description = "Combusta: fuel-agnostic internal combustion engine cycle analysis, case comparison, and verification & validation (ASME V&V 20) toolkit for CFD and test-bench data."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,6 +23,9 @@ keywords = [
     "thermodynamics",
     "heat-release-rate",
     "aero-diesel",
+    "hydrogen-engine",
+    "exhaust-emissions",
+    "engine-case-comparison",
     "spray-penetration",
     "ecn-spray",
     "asme-vv20",
@@ -35,7 +38,7 @@ keywords = [
     "second-law",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
@@ -46,7 +49,6 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Physics",
-    "Topic :: Scientific/Engineering :: Atmospheric Science",
     "Topic :: Scientific/Engineering :: Visualization",
     "Typing :: Typed",
 ]
@@ -70,6 +72,7 @@ Repository = "https://github.com/alpztel/combusta.git"
 Documentation = "https://github.com/alpztel/combusta#readme"
 Issues = "https://github.com/alpztel/combusta/issues"
 Changelog = "https://github.com/alpztel/combusta/blob/main/CHANGELOG.md"
+Releases = "https://github.com/alpztel/combusta/releases"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -20,8 +20,8 @@ authors:
 repository-code: "https://github.com/alpztel/combusta"
 url: "https://github.com/alpztel/combusta"
 license: MIT
-version: "0.2.0"
-date-released: "2026-11-08"
+version: "0.3.0"
+date-released: "2026-11-25"
 keywords:
   - internal-combustion-engines
   - heat-release-analysis

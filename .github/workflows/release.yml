@@ -1,0 +1,65 @@
+name: Release distributions
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, check, and attach sdist and wheel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check that the tag matches the package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "tag=$TAG version=$VERSION"
+          test "$TAG" = "$VERSION"
+
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check --strict dist/*
+
+      - name: Smoke-test the built wheel outside the source tree
+        run: |
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/wheel-env/bin/python - <<'PY'
+          import os
+          import combusta
+          from combusta.thermo.fuels import HYDROGEN
+          expected = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          assert combusta.__version__ == expected, (combusta.__version__, expected)
+          assert abs(HYDROGEN.stoichiometric_afr - 34.3) < 0.2, HYDROGEN.stoichiometric_afr
+          print("combusta", combusta.__version__, "imports from", combusta.__file__)
+          PY
+
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
+
+      - name: Attach distributions to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/* --clobber

@@ -1,69 +1,82 @@
-# Contributing to `combusta`
+# Contributing to Combusta
 
-Thank you for contributing to **`combusta`**. Because this toolkit is used for quantitative thermodynamic diagnostics and **ASME V&V 20-2009** 3D CFD verification, all contributions must satisfy strict physical, dimensional, and numerical engineering invariants.
+Contributions are welcome: bug reports, verification cases, corrections to the physics or the references, documentation, and code. Combusta produces numbers that may end up in engineering reports and theses, so every change has to be traceable to a published source or a closed-form result.
 
----
+Please read the [Code of Conduct](CODE_OF_CONDUCT.md) before taking part. Security problems are **not** reported through issues; see [SECURITY.md](SECURITY.md).
 
-## 1. Non-Negotiable Engineering Rules
+## Ways to contribute
 
-### 1.1 Zero Proprietary Data (Strict NDA Hygiene)
-- **Never** commit confidential engine CAD/mesh geometries, proprietary OEM calibration maps, restricted test-cell datasets, or ANSYS Forte binary restart files (`*.ftres`, `*.ftsim`, `*.cas.h5`, `*.cgns`).
-- All tests, examples, and benchmarks must rely exclusively on:
-  1. Closed-form analytical solutions (e.g., adiabatic/polytropic cycles, forward-ODE Wiebe synthetic traces, exact power-law grid convergence polynomials), or
-  2. Publicly licensed open-science datasets such as the **Sandia Engine Combustion Network (ECN)** Spray A / Spray D archives.
+- **Bug reports.** Use the [bug report form](https://github.com/alpztel/combusta/issues/new/choose). Include the version, a minimal reproduction on synthetic data, and the expected result.
+- **Physics and reference corrections.** If a formula, constant, or citation is wrong, open a *Physics / reference issue* and cite the source (equation, table, or page) that shows the correct value.
+- **Feature requests.** Describe the analysis you need and the literature it is based on.
+- **Pull requests.** For anything larger than a small fix, open an issue first so the approach can be agreed before you write code.
 
-### 1.2 Strict SI Internal Architecture
-- Every internal physics kernel (`signal/`, `thermo/`, `spray/`, `vv/`, `ignition/`, `exergy/`, `constants.py`) must accept and return **strict SI base/derived units** (`Pa`, `m`, `m^2`, `m^3`, `K`, `kg`, `kg/m^3`, `s`, `J`, `W/m^2`) with explicit crank-angle conventions (`deg` vs. `rad` documented in parameter names such as `crank_angle_deg`, `dv_dtheta_m3_per_deg`).
-- Unit conversions (`MPa -> Pa`, `bar -> Pa`, `dyne/cm^2 -> Pa`, `cm^3 -> m^3`, `mm -> m`, `ms -> s`, `degC -> K`, `erg/CA -> J/deg`) happen **exclusively at ingestion (`io/`) or display (`plotting/`) boundaries**.
+## Ground rules
 
-### 1.3 Vectorization (Zero Element-Wise Loops)
-- Numerical modules (`signal/`, `thermo/`, `spray/`, `vv/`, `ignition/`, `exergy/`, `constants.py`) are audited via Python's `ast` module across `tests/test_01_io_and_constants.py` through `tests/test_07_exergy_second_law.py`.
-- Element-wise Python `for` or `while` loops over crank-angle, time, temperature, or mesh arrays are **strictly forbidden** — use vectorized `numpy` broadcasting, `np.where`, `scipy.interpolate.CubicSpline`, and `scipy.signal.sosfiltfilt`.
+### No proprietary data
 
-### 1.4 Static Type Safety & Documentation
-- All public functions, methods, and `@dataclass(frozen=True, slots=True)` containers require complete Python 3.11+ type annotations (including return types) and NumPy-style docstrings stating exact SI units in brackets (`[Pa]`, `[m^3/deg]`, `[W/(m^2*K)]`).
-- Static type verification with `pyrefly` must pass with **0 errors**.
+Never commit, attach, or paste confidential material: engine geometry or meshes, OEM calibration maps, test-cell logs, ANSYS Forte project or restart files, or licensed tutorial files. Tests, examples, and benchmarks use only
 
----
+1. closed-form or manufactured solutions (polytropic and Otto cycles, forward-integrated Wiebe cycles, power-law grid triplets), or
+2. openly licensed data, such as the Sandia [Engine Combustion Network](https://ecn.sandia.gov/) archives, with their source and terms stated.
 
-## 2. Local Development Setup
+### SI units inside, conversions at the boundary
+
+Every function in the numerical packages (`thermo`, `signal`, `spray`, `vv`, `ignition`, `exergy`, `emissions`, `compare`, `case`) takes and returns SI quantities. Units appear in parameter names (`pressure_pa`, `crank_angle_deg`, `dv_dtheta_m3_per_deg`) and in brackets in docstrings (`[Pa]`, `[J/deg]`). Unit conversion happens only in `combusta.io` (ingestion) and `combusta.plotting` (display), using the tables in `combusta.constants`.
+
+### Every model has a source and a test
+
+A new correlation, model, or procedure must
+
+1. cite its primary source (SAE paper number, journal article, standard and clause, or textbook equation) in the module docstring and in the README reference list,
+2. reject non-physical input with `PhysicalBoundsError` from `combusta.exceptions` (for example $P \le 0$, $T \le 0$, a compression ratio $\le 1$), and state the validity range of the correlation, and
+3. come with a verification test against a closed-form solution, a published table, or a theoretical order of accuracy. Name the reference in the test docstring and add a row to the README verification table.
+
+Heuristics that are not taken from the literature (for example a plausibility threshold) must be labeled as such in the docstring and the README.
+
+### Typing and style
+
+- Python 3.11 or newer; complete type annotations on public functions, including return types.
+- Results are returned as `@dataclass(frozen=True, slots=True)` containers.
+- NumPy-style docstrings.
+- `pyrefly check` must report no errors.
+
+## Development setup
 
 ```bash
 git clone https://github.com/alpztel/combusta.git
 cd combusta
-
 python -m venv .venv
-# Windows (PowerShell):
-.\.venv\Scripts\Activate.ps1
-# Linux / macOS:
-# source .venv/bin/activate
-
+# Windows PowerShell: .\.venv\Scripts\Activate.ps1
+# Linux / macOS:      source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -e ".[dev]"
 ```
 
----
+## Before you open a pull request
 
-## 3. Pre-Submission Verification Checklist
-
-Before opening a Pull Request, run all three checks from the repository root:
+Run these from the repository root; CI runs the same steps on Python 3.11, 3.12, and 3.13:
 
 ```bash
-# 1. Static type checking (must report 0 errors)
-pyrefly check
-
-# 2. Analytical & strict physical audit suite (all 65 tests must pass)
-pytest -v
-
-# 3. Headless end-to-end showcase & 300-DPI figure generation smoke test
-python examples/altitude_sweep_demo.py
+pyrefly check                        # static type check, 0 errors
+pytest                               # full test suite
+python examples/altitude_sweep_demo.py   # end-to-end smoke test
 ```
 
----
+Then:
 
-## 4. Adding New Correlations or V&V Models
+- add an entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog sections: Added, Changed, Fixed, Removed, Documentation),
+- update the README if you changed a public API, an equation, or a reference,
+- write commit messages in the Conventional Commits style (`feat(thermo): ...`, `fix(vv): ...`, `docs: ...`).
 
-1. Cite the primary peer-reviewed source (e.g., SAE Technical Paper number, ASME standard section, or NASA Technical Report) in both the module docstring and `CITATION.cff` / `README.md`.
-2. Add domain bounds validation raising `PhysicalBoundsError` from `combusta.exceptions` for non-physical inputs (e.g., $P \le 0$, $T \le 0$, $`r_c \le 1`$, $`h_1 \ge h_2`$).
-3. Include an analytical or asymptotic verification test in `tests/` proving machine-precision or theoretical order-of-accuracy convergence.
+## Review and merging
 
+`main` is protected. Pull requests are merged after the three CI jobs pass and the maintainer has reviewed the change. Review concentrates on physical correctness, traceability to the literature, and test coverage, in that order.
+
+## Releases
+
+Combusta follows [Semantic Versioning](https://semver.org/). While the version is 0.x, minor releases may change the public API; such changes are listed in the changelog. A release consists of a version bump in `pyproject.toml`, `src/combusta/__init__.py`, and `CITATION.cff`, a dated changelog section, an annotated `vX.Y.Z` tag, and a GitHub release whose wheel and source distribution are built by the release workflow.
+
+## License
+
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE) of this project.

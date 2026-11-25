@@ -1,6 +1,7 @@
 # Combusta
 
 [![CI](https://github.com/alpztel/combusta/actions/workflows/ci_validation.yml/badge.svg)](https://github.com/alpztel/combusta/actions/workflows/ci_validation.yml)
+[![Release](https://img.shields.io/github/v/release/alpztel/combusta?color=4477AA)](https://github.com/alpztel/combusta/releases/latest)
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-004488.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-117733.svg)](LICENSE)
 [![Typed: PEP 561](https://img.shields.io/badge/typing-PEP%20561%20%7C%20pyrefly-DDAA33.svg)](src/combusta/py.typed)
@@ -9,7 +10,7 @@
 **Combusta** is a Python library for the analysis of internal combustion engine cycles from simulation and test-bench data. It reduces crank-angle-resolved pressure traces to standard cycle metrics, compares engine configurations side by side, post-processes exhaust emissions, and quantifies numerical and validation uncertainty following ASME V&V 20. Thermodynamic properties are fuel-agnostic: any C<sub>x</sub>H<sub>y</sub>O<sub>z</sub> fuel, including hydrogen, is supported at any air-excess ratio, and every quantity is held in SI units.
 
 > [!IMPORTANT]
-> **Project status — 0.3.0 (development).** Every model is verified against closed-form solutions and published reference data (see [Verification](#verification)). The library has **not yet been validated against engine or CFD measurements**, and its readers have not yet been exercised on real ANSYS Forte output. Treat results as research-grade until such validation is available.
+> **Project status — 0.3.0 (alpha).** Every model is verified against closed-form solutions and published reference data (see [Verification](#verification)). The library has **not yet been validated against engine or CFD measurements**, and its readers have not yet been exercised on real ANSYS Forte output. Treat results as research-grade until such validation is available.
 
 <details>
 <summary><b>Türkçe özet</b></summary>
@@ -53,7 +54,15 @@ Combusta, içten yanmalı motor çevrimlerini simülasyon (ör. ANSYS Forte) ve 
 
 ## Installation
 
-Combusta requires Python 3.11 or later.
+Combusta requires Python 3.11 or later. It is not published on PyPI. To use a tagged release, install it from GitHub:
+
+```bash
+python -m pip install "combusta @ git+https://github.com/alpztel/combusta.git@v0.3.0"
+```
+
+The wheel and source distribution of each version are also attached to its [GitHub release](https://github.com/alpztel/combusta/releases), with build provenance attestations that can be checked with `gh attestation verify <file> --repo alpztel/combusta`.
+
+For development, clone the repository and install it in editable mode:
 
 ```bash
 git clone https://github.com/alpztel/combusta.git
@@ -513,7 +522,7 @@ pytest -m strict_audit # analytical audits
 pyrefly check          # static type check
 ```
 
-Continuous integration runs the type check, the test suite, and the example on Python 3.11, 3.12, and 3.13. Pull requests into `main` require all three jobs to pass. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [CHANGELOG.md](CHANGELOG.md) for the release history.
+Continuous integration runs the type check, the test suite, and the example on Python 3.11, 3.12, and 3.13. Pull requests into `main` require all three jobs to pass. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the code of conduct, [SECURITY.md](SECURITY.md) for reporting vulnerabilities, and [CHANGELOG.md](CHANGELOG.md) and the [releases page](https://github.com/alpztel/combusta/releases) for the version history.
 
 ## How to cite
 

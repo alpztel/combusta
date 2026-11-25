@@ -1,0 +1,47 @@
+name: Bug report
+description: Wrong behaviour, a crash, or an error message.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Please reproduce it with **synthetic or openly licensed data only**. Never attach proprietary engine data, ANSYS Forte project files, or licensed tutorial files.
+        If the result is numerically wrong rather than broken, the *Physics / reference issue* form may fit better.
+  - type: input
+    id: version
+    attributes:
+      label: Combusta version or commit
+      description: Output of `python -c "import combusta; print(combusta.__version__)"`, or a commit hash.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version and operating system.
+      placeholder: "Python 3.12, Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and the expected behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: A short, self-contained script on synthetic data.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Error output
+      description: Full traceback or log, if any.
+      render: text

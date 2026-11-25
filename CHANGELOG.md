@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-25
+
+First release under the name **Combusta**. Versions 0.1.0 and 0.2.0 were published as `ice-cfd-validation-assistant`. This release has been verified against closed-form solutions and published reference data, but **not yet validated against engine or CFD measurements**.
+
+### Repository
+- Security policy with private vulnerability reporting, a code of conduct (Contributor Covenant 2.1), rewritten contribution guidelines, issue forms (bug report, physics/reference issue, feature request), and a pull request template.
+- Dependabot for Python dependencies and GitHub Actions; CodeQL code scanning.
+- Release workflow that builds the sdist and wheel, checks them with `twine`, smoke-tests the wheel outside the source tree, attaches them to the GitHub release, and generates build provenance attestations.
+- Package classifier changed from "Beta" to "Alpha" to reflect the validation status.
+
 ### Documentation
 - README rewritten: scope, quick start, package overview, a complete mathematical formulation, a verification table that names the reference of every check, assumptions and limitations, and a verified reference list. Third-party license notices moved from `LICENSE` (now the plain MIT text) into the README and corrected.
 - Corrected citations: Gatowski et al. (1984) is SAE 841359; Caton (2000) is SAE 2000-01-1081; Rakopoulos & Giakoumis (2006) is a review in *Progress in Energy and Combustion Science*; the 2008 TDC paper by Pipitone et al. is SAE 2008-36-0059.
@@ -95,5 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 39 automated unit, analytical roundtrip, AST vectorization, memory-leak, and `pyrefly` static-typing audit tests under `tests/`.
   - Multi-version Ubuntu GitHub Actions workflow (`.github/workflows/ci_validation.yml`) for Python 3.11, 3.12, and 3.13.
 
-[0.2.0]: https://github.com/alpztel/combusta/releases/tag/v0.2.0
+[Unreleased]: https://github.com/alpztel/combusta/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/alpztel/combusta/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/alpztel/combusta/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/alpztel/combusta/releases/tag/v0.1.0
