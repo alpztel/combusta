@@ -599,6 +599,8 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 
 ## Roadmap
 
+Planned work is tracked as issues in the [v0.5.0 milestone](https://github.com/alpztel/combusta/milestone/1).
+
 - Validation on real ANSYS Forte cases and test-bench data.
 - Pre-chamber analysis with burned/unburned composition tracking in both volumes (the current two-volume analysis uses frozen composition).
 - Thermal-shock error of piezoelectric transducers in the measurement-uncertainty model.
