@@ -215,6 +215,6 @@ class TestStrictAuditIOAndConstants:
         assert q_wall_si == pytest.approx(14.2, rel=1e-14, abs=1e-12)
         assert pv_joules == pytest.approx(1125.0, rel=1e-14, abs=1e-11)
 
-    def test_audit_io_and_constants_typing(self) -> None:
+    def test_audit_io_and_constants_type_check(self) -> None:
         """AUDIT: pyrefly type safety across io/ and constants.py."""
         assert_package_type_checks("io")

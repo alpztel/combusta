@@ -103,9 +103,9 @@ class AltitudeSprayPlotCase:
     siebers_penetration_m : NDArray[np.float64]
         Naber & Siebers (1996) penetration $S_{\\text{NS}}(t)$ [m].
     cfd_time_s : NDArray[np.float64] | None, optional
-        Discrete ANSYS Forte CFD sample timestamps $t_{\\text{CFD}}$ [s].
+        Discrete CFD sample timestamps $t_{\\text{CFD}}$ [s].
     cfd_penetration_m : NDArray[np.float64] | None, optional
-        Discrete ANSYS Forte CFD spray tip penetration $S_{\\text{CFD}}$ [m].
+        Discrete CFD spray tip penetration $S_{\\text{CFD}}$ [m].
     impingement_time_s : float | None, optional
         Detected wall-impingement onset time $t_{\\text{imp}}$ [s], if reached.
     """
@@ -464,7 +464,7 @@ def plot_altitude_spray_comparison(
     ----------
     cases : Sequence[AltitudeSprayPlotCase]
         Ordered altitude scenarios containing Hiroyasu-Arai (1990), Naber & Siebers (1996),
-        and optional ANSYS Forte CFD spray penetration curves.
+        and optional CFD spray penetration samples.
     wall_distance_m : float
         Piston bowl / cylinder liner radial clearance $L_{\\text{wall}}$ [m].
     title : str | None, optional
@@ -533,7 +533,7 @@ def plot_altitude_spray_comparison(
                     facecolors="white",
                     linewidths=1.35,
                     zorder=5,
-                    label=f"{case.label} — ANSYS Forte CFD",
+                    label=f"{case.label} — CFD samples",
                 )
 
             if case.impingement_time_s is not None:

@@ -480,7 +480,7 @@ class TestStrictAuditSignalAndThermo:
         )
         np.testing.assert_allclose(hrr.dq_gross_j_per_deg, hrr.dq_net_j_per_deg + dq_ht, rtol=1e-14)
 
-    def test_audit_signal_and_thermo_vectorization(self) -> None:
+    def test_audit_signal_and_thermo_type_check(self) -> None:
         """AUDIT: pyrefly static type check of the signal/ and thermo/ packages."""
         assert_package_type_checks("signal")
         assert_package_type_checks("thermo")

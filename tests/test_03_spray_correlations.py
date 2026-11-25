@@ -418,6 +418,6 @@ class TestStrictAuditSprayCorrelations:
         assert float(ecn_parsed.time_s[0]) == pytest.approx(1.0e-3, rel=1.0e-15, abs=1.0e-18)
         assert float(ecn_parsed.liquid_penetration_m[0]) == pytest.approx(0.045, rel=1.0e-15, abs=1.0e-18)
 
-    def test_audit_spray_vectorization_and_typing(self) -> None:
+    def test_audit_spray_type_check(self) -> None:
         """AUDIT: pyrefly static type check of the spray/ package."""
         assert_package_type_checks("spray")

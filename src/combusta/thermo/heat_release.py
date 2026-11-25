@@ -207,7 +207,7 @@ def compute_heat_release(
         (``blend_burned_unburned``), with $x_b(\\theta)$ taken as the normalized
         cumulative gross heat release over ``combustion_window_deg``. Because $x_b$
         depends on the heat release it is resolved by fixed-point iteration
-        (Gatowski et al., 1984, SAE 840359; Brunt et al., 1998, SAE 981052).
+        (Gatowski et al., 1984, SAE 841359; Brunt et al., 1998, SAE 981052).
     combustion_window_deg : tuple[float, float] | None, optional
         Crank-angle window [deg] over which $x_b$ rises from 0 to 1; defaults to the
         full trace. $x_b = 0$ before and $x_b = 1$ after the window.

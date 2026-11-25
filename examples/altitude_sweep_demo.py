@@ -1,17 +1,28 @@
-"""End-to-end Aero-Diesel high-altitude CFD validation & diagnostic showcase.
+"""Aero-diesel altitude sweep: an end-to-end, fully synthetic demonstration.
 
-Simulates an open-literature 4-stroke turbocharged Aero-Diesel single cylinder across
-three flight altitudes (Sea Level 0 ft, 15,000 ft, and 30,000 ft) using strictly
-non-proprietary textbook parameters across seven coupled engineering disciplines:
-  1. ISO 2533 International Standard Atmosphere (ISA) boundary scaling
-  2. Closed-cycle First-Law ODE synthesis + zero-phase filtering + Heywood AHRR,
-     CA10/CA50/CA90 combustion phasing, and indicated mean effective pressure (IMEP)
-  3. High-altitude Jet-A1/Diesel spray penetration scaling (Hiroyasu-Arai 1990 &
-     Naber-Siebers 1996) and piston-bowl wall impingement risk detection
-  4. Three-mesh ASME V&V 20-2009 / Celik et al. (2008) Grid Convergence Index (GCI)
-  5. Dynamic Livengood-Wu (1955) auto-ignition delay & sub-degree SOC prediction
-  6. Second-Law exergy budgets across altitude-varying dead states (P0(z), T0(z))
-  7. Automated export of four 300-DPI SAE/IEEE publication figures into ``assets/``
+Every number in this script comes from textbook models; no engine, CFD, or test-bench
+data are used. The script shows how the Combusta building blocks chain together and
+produces the figures in ``assets/``. Its outputs are illustrations, not engineering
+results.
+
+Model chain, evaluated at 0 ft, 15,000 ft and 30,000 ft (ISO 2533 atmosphere):
+
+1. Intake: a two-stage turbocharger holds a target manifold pressure until its maximum
+   overall pressure ratio is reached (critical altitude of roughly 21,000 ft), followed
+   by charge-air cooling toward ambient temperature.
+2. Motored compression: closed-cycle single-zone First-Law ODE with NASA dry-air
+   properties and Woschni (1967) wall heat transfer.
+3. Ignition: Livengood-Wu (1955) integral of the Assanis et al. (2003) ignition-delay
+   correlation, evaluated on the motored state from start of injection; its root gives
+   the start of combustion (SOC).
+4. Fired cycle: Wiebe heat release starting at the predicted SOC, integrated with the
+   same ODE; synthetic 3.5 kPa transducer noise is added and removed with a zero-phase
+   Savitzky-Golay filter.
+5. Inverse analysis: gross heat release, CA10/50/90 and IMEP; spray tip penetration at
+   the in-cylinder density at injection; Second-Law exergy budget with an altitude
+   dead state, including its independent closure check.
+6. GCI: the three-grid procedure applied to a *manufactured* power-law triplet, to
+   illustrate the method and the figure. It is not a mesh study.
 """
 
 from __future__ import annotations
@@ -20,7 +31,7 @@ import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeAlias
+from typing import Final, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
@@ -34,17 +45,17 @@ if str(_REPO_ROOT / "src") not in sys.path:
 from combusta import (  # noqa: E402
     DRY_AIR,
     FEET_TO_M,
+    JET_A1_EXERGY_FACTOR,
+    JET_A1_SURROGATE,
     PREDEFINED_FUELS,
     AltitudeSprayPlotCase,
     BurnFractionMetrics,
-    DeadStateConditions,
     ExergyCycleBudget,
-    GCIResult,
+    DeadStateConditions,
     HeatReleaseResult,
     IMEPResult,
     LivengoodWuResult,
     SliderCrankGeometry,
-    SprayValidationMetrics,
     ThermoOverlayTrace,
     WoschniCorrelation,
     compute_exergy_cycle_budget,
@@ -54,7 +65,6 @@ from combusta import (  # noqa: E402
     compute_heat_release,
     compute_imep,
     compute_isa_conditions,
-    compute_spray_validation_metrics,
     evaluate_altitude_spray_risk,
     extract_burn_fractions,
     hiroyasu_arai_penetration,
@@ -69,502 +79,327 @@ from combusta import (  # noqa: E402
 
 FloatArray: TypeAlias = NDArray[np.float64]
 
+# --- Engine and operating assumptions (illustrative, not data of any specific engine) ---
+GEOMETRY: Final = SliderCrankGeometry(bore_m=0.085, stroke_m=0.090, conrod_m=0.155, compression_ratio=16.5)
+ENGINE_SPEED_RPM: Final[float] = 2400.0
+WALL_TEMPERATURE_K: Final[float] = 460.0
+THETA_SOI_DEG: Final[float] = -8.0
+BURN_DURATION_DEG: Final[float] = 40.0
+WIEBE_A: Final[float] = 6.908  # 99.9 % burned at the end of the duration
+WIEBE_M: Final[float] = 2.0
+NOMINAL_FUEL_KG: Final[float] = 2.45e-5
+LAMBDA_MIN: Final[float] = 1.45  # smoke-limited minimum air-excess ratio
+
+TARGET_MANIFOLD_PRESSURE_PA: Final[float] = 2.4 * 101_325.0
+MAX_PRESSURE_RATIO: Final[float] = 5.5  # two-stage turbocharger
+COMPRESSOR_EFFICIENCY: Final[float] = 0.72
+CHARGE_AIR_COOLER_EFFECTIVENESS: Final[float] = 0.80
+INTAKE_HEATING_K: Final[float] = 15.0  # wall and residual-gas heating up to IVC
+
+INJECTION_DELTA_P_PA: Final[float] = 100.0e6
+FUEL_DENSITY_KG_M3: Final[float] = 810.0
+NOZZLE_DIAMETER_M: Final[float] = 90.0e-6
+SPRAY_CONE_DEG: Final[float] = 19.0
+BOWL_WALL_DISTANCE_M: Final[float] = 0.038
+
+THETA: Final[FloatArray] = np.linspace(-180.0, 180.0, 3601, dtype=np.float64)
+
 
 @dataclass(frozen=True, slots=True)
-class AltitudeScenarioSummary:
-    """Aggregated engineering diagnostics for a single flight altitude."""
+class AltitudeCase:
+    """Results of one synthetic altitude case."""
 
     label: str
     altitude_ft: float
-    altitude_m: float
-    t_amb_k: float
-    p_amb_kpa: float
-    rho_amb_kg_m3: float
-    p_ivc_kpa: float
+    p_ambient_pa: float
+    p_ivc_pa: float
     t_ivc_k: float
     rho_soi_kg_m3: float
-    q_fuel_j: float
-    theta_deg: FloatArray
-    volume_m3: FloatArray
+    fuel_mass_kg: float
+    ignition: LivengoodWuResult
     pressure_pa: FloatArray
+    volume_m3: FloatArray
     hrr: HeatReleaseResult
     burn: BurnFractionMetrics
     imep: IMEPResult
-    spray_plot_case: AltitudeSprayPlotCase
-    spray_metrics: SprayValidationMetrics
-    wall_impingement: bool
-    impingement_time_ms: float | None
-    gci: GCIResult
-    lw: LivengoodWuResult
     exergy: ExergyCycleBudget
 
 
-def _wiebe_heat_rate_j_per_deg(
-    theta_deg: float,
-    *,
-    q_total_j: float,
-    theta_soi_deg: float,
-    duration_deg: float,
-    a_factor: float = 6.908,
-    m_shape: float = 2.0,
-) -> float:
-    """Single-Wiebe analytical chemical heat-release rate $dQ_{ch}/d\\theta$ [J/deg]."""
-    if theta_deg <= theta_soi_deg or theta_deg >= theta_soi_deg + duration_deg:
+def intake_state(altitude_m: float) -> tuple[float, float, float]:
+    """Return ambient pressure, IVC pressure and IVC temperature for a boost-controlled engine."""
+    isa = compute_isa_conditions(altitude_m)
+    p_amb = float(isa.pressure_pa[0])
+    t_amb = float(isa.temperature_k[0])
+    pressure_ratio = min(TARGET_MANIFOLD_PRESSURE_PA / p_amb, MAX_PRESSURE_RATIO)
+    t_compressor = t_amb * (1.0 + (pressure_ratio ** (0.4 / 1.4) - 1.0) / COMPRESSOR_EFFICIENCY)
+    t_manifold = t_compressor - CHARGE_AIR_COOLER_EFFECTIVENESS * (t_compressor - t_amb)
+    return p_amb, pressure_ratio * p_amb, t_manifold + INTAKE_HEATING_K
+
+
+def wiebe_rate(theta_deg: float, q_total_j: float, start_deg: float) -> float:
+    """Wiebe heat-release rate dQ/dθ [J/deg]."""
+    u = (theta_deg - start_deg) / BURN_DURATION_DEG
+    if u <= 0.0 or u >= 1.0:
         return 0.0
-    u = (theta_deg - theta_soi_deg) / duration_deg
     return (
         q_total_j
-        * (a_factor * (m_shape + 1.0) / duration_deg)
-        * (u**m_shape)
-        * math.exp(-a_factor * (u ** (m_shape + 1.0)))
+        * WIEBE_A
+        * (WIEBE_M + 1.0)
+        / BURN_DURATION_DEG
+        * u**WIEBE_M
+        * math.exp(-WIEBE_A * u ** (WIEBE_M + 1.0))
     )
 
 
-def simulate_aero_diesel_altitude_case(
-    altitude_ft: float,
-    geom: SliderCrankGeometry,
-    *,
-    engine_speed_rpm: float = 2400.0,
-    wall_temp_k: float = 460.0,
-    bowl_wall_distance_m: float = 0.038,
-    rng_seed: int = 42,
-) -> AltitudeScenarioSummary:
-    """Synthesize and validate one Aero-Diesel operating point at ``altitude_ft``."""
-    alt_m = altitude_ft * FEET_TO_M
-    isa = compute_isa_conditions(alt_m)
-    t_amb_k = float(isa.temperature_k[0])
-    p_amb_pa = float(isa.pressure_pa[0])
-    rho_amb = float(isa.density_kg_m3[0])
+def single_zone_cycle(p_ivc_pa: float, t_ivc_k: float, q_total_j: float, soc_deg: float) -> FloatArray:
+    """Integrate the closed-cycle single-zone pressure equation with Woschni wall heat loss."""
+    kin_ivc = GEOMETRY.evaluate(THETA[:1])
+    v_ivc = float(kin_ivc.volume_m3[0])
+    r_air = DRY_AIR.specific_gas_constant
+    mass = p_ivc_pa * v_ivc / (r_air * t_ivc_k)
+    s_p = 2.0 * GEOMETRY.stroke_m * ENGINE_SPEED_RPM / 60.0
+    omega = 6.0 * ENGINE_SPEED_RPM
 
-    # Single-stage fixed-pressure-ratio turbocharger + air-to-air intercooler
-    pi_comp = 2.40
-    eta_comp = 0.76
-    intercooler_eff = 0.70
-    coolant_sink_k = max(t_amb_k + 12.0, 295.0)
+    def rhs(th: float, state: FloatArray) -> list[float]:
+        p = max(float(state[0]), 1.0e3)
+        k = GEOMETRY.evaluate(np.array([th]))
+        v, dv, area = float(k.volume_m3[0]), float(k.dv_dtheta_m3_per_deg[0]), float(k.wall_area_m2[0])
+        t = min(max(p * v / (mass * r_air), 210.0), 5800.0)
+        gamma = float(DRY_AIR.gamma(np.array([t]))[0])
+        p_motored = p_ivc_pa * (v_ivc / v) ** 1.35
+        w = 2.28 * s_p + 3.24e-3 * (GEOMETRY.displaced_volume_m3 * t_ivc_k / (p_ivc_pa * v_ivc)) * max(p - p_motored, 0.0)
+        h = 130.0 * GEOMETRY.bore_m**-0.2 * (p * 1.0e-5) ** 0.8 * t**-0.53 * w**0.8
+        dq_wall = h * area * (t - WALL_TEMPERATURE_K) / omega
+        dq_fuel = wiebe_rate(th, q_total_j, soc_deg)
+        return [((gamma - 1.0) * (dq_fuel - dq_wall) - gamma * p * dv) / v]
 
-    p_ivc_pa = p_amb_pa * pi_comp
-    t_comp_out_k = t_amb_k * (1.0 + ((pi_comp ** (0.4 / 1.4)) - 1.0) / eta_comp)
-    t_ivc_k = t_comp_out_k - intercooler_eff * (t_comp_out_k - coolant_sink_k) + 18.0
+    sol = solve_ivp(rhs, (THETA[0], THETA[-1]), [p_ivc_pa], t_eval=THETA, rtol=1.0e-8, atol=1.0e-4)
+    if not sol.success:
+        raise RuntimeError(sol.message)
+    return np.asarray(sol.y[0], dtype=np.float64)
 
-    # Crank-angle grid [-180, +180] deg ATDC (closed high-pressure cycle)
-    theta_deg = np.linspace(-180.0, 180.0, 3601, dtype=np.float64)
-    kin = geom.evaluate(theta_deg)
-    r_spec = DRY_AIR.specific_gas_constant
-    v_ivc_m3 = float(kin.volume_m3[0])
-    trapped_mass_kg = (p_ivc_pa * v_ivc_m3) / (r_spec * t_ivc_k)
 
-    # Fueling limited by minimum excess-air ratio (lambda >= 1.45 at high altitude)
-    afr_stoich = 14.6
-    lhv_jet_a1_j_per_kg = 43.2e6
-    max_clean_fuel_kg = trapped_mass_kg / (1.45 * afr_stoich)
-    nominal_fuel_kg = 2.45e-5  # 24.5 mg/cycle nominal cruise demand
-    injected_fuel_kg = min(nominal_fuel_kg, max_clean_fuel_kg)
-    q_fuel_j = injected_fuel_kg * lhv_jet_a1_j_per_kg * 0.985
+def run_altitude_case(altitude_ft: float, rng: np.random.Generator) -> AltitudeCase:
+    """Synthesize and analyze one altitude case."""
+    altitude_m = altitude_ft * FEET_TO_M
+    p_amb, p_ivc, t_ivc = intake_state(altitude_m)
+    kin = GEOMETRY.evaluate(THETA)
+    r_air = DRY_AIR.specific_gas_constant
+    mass = p_ivc * float(kin.volume_m3[0]) / (r_air * t_ivc)
 
-    # Ignition delay lengthens as intake manifold pressure drops with altitude
-    id_shift_deg = 2.2 * ((101_325.0 * pi_comp / p_ivc_pa) ** 0.38 - 1.0)
-    theta_soi_comb_deg = -7.5 + id_shift_deg
-    burn_duration_deg = 38.0 + 1.8 * id_shift_deg
+    fuel_mass = min(NOMINAL_FUEL_KG, mass / (LAMBDA_MIN * JET_A1_SURROGATE.stoichiometric_afr))
+    q_fuel = fuel_mass * JET_A1_SURROGATE.lhv_j_per_kg
 
-    mean_piston_speed_m_s = 2.0 * geom.stroke_m * (engine_speed_rpm / 60.0)
-    omega_deg_per_s = 6.0 * engine_speed_rpm
-
-    # Forward closed-cycle First-Law ODE integration:
-    # dP/dtheta = ((gamma(T)-1)/V) * (dQ_ch/dtheta - dQ_ht/dtheta) - gamma(T)*(P/V)*(dV/dtheta)
-    def cycle_ode(th: float, state: FloatArray) -> list[float]:
-        p_curr = max(float(state[0]), 1.0e3)
-        th_arr = np.array([th], dtype=np.float64)
-        k_pt = geom.evaluate(th_arr)
-        v_curr = float(k_pt.volume_m3[0])
-        dv_dth = float(k_pt.dv_dtheta_m3_per_deg[0])
-        a_wall = float(k_pt.wall_area_m2[0])
-
-        t_curr = min(max((p_curr * v_curr) / (trapped_mass_kg * r_spec), 210.0), 5800.0)
-        gamma_curr = float(np.asarray(DRY_AIR.gamma(t_curr)).item())
-
-        dq_ch = _wiebe_heat_rate_j_per_deg(
-            th,
-            q_total_j=q_fuel_j,
-            theta_soi_deg=theta_soi_comb_deg,
-            duration_deg=burn_duration_deg,
-        )
-
-        # Motored reference pressure for Woschni combustion-induced swirl/velocity term
-        p_mot = p_ivc_pa * ((v_ivc_m3 / v_curr) ** 1.35)
-        w_gas = 2.28 * mean_piston_speed_m_s + 3.24e-3 * (
-            geom.displaced_volume_m3 * t_ivc_k / (p_ivc_pa * v_ivc_m3)
-        ) * max(p_curr - p_mot, 0.0)
-        hc = (
-            130.0
-            * (geom.bore_m**-0.2)
-            * ((p_curr * 1.0e-5) ** 0.8)
-            * (t_curr**-0.53)
-            * (w_gas**0.8)
-        )
-        dq_ht = hc * a_wall * (t_curr - wall_temp_k) / omega_deg_per_s
-
-        dp_dth = ((gamma_curr - 1.0) / v_curr) * (dq_ch - dq_ht) - (
-            gamma_curr * p_curr / v_curr
-        ) * dv_dth
-        return [dp_dth]
-
-    ode_sol = solve_ivp(
-        cycle_ode,
-        t_span=(-180.0, 180.0),
-        y0=[p_ivc_pa],
-        t_eval=theta_deg,
-        method="RK45",
-        rtol=1.0e-8,
-        atol=1.0e-4,
+    # Ignition predicted on the motored state (before combustion the charge is motored)
+    p_motored = single_zone_cycle(p_ivc, t_ivc, 0.0, soc_deg=1.0e3)
+    t_motored = p_motored * kin.volume_m3 / (mass * r_air)
+    phi_global = fuel_mass * JET_A1_SURROGATE.stoichiometric_afr / mass
+    ignition = livengood_wu_integral(
+        THETA,
+        p_motored,
+        t_motored,
+        ENGINE_SPEED_RPM,
+        THETA_SOI_DEG,
+        equivalence_ratio=phi_global,
+        cetane_number=PREDEFINED_FUELS["JET_A1_JP8"].cetane_number,
     )
-    p_exact_pa = np.asarray(ode_sol.y[0], dtype=np.float64)
+    if ignition.misfire_detected:
+        raise RuntimeError(f"No auto-ignition predicted at {altitude_ft:.0f} ft.")
 
-    # Add realistic piezoelectric transducer noise (3.5 kPa RMS) & apply zero-phase filter
-    rng = np.random.default_rng(rng_seed + round(altitude_ft))
-    p_measured_pa = p_exact_pa + rng.normal(0.0, 3_500.0, size=p_exact_pa.shape)
-    p_filtered_pa = savgol_zero_phase(p_measured_pa, window_length=31, polyorder=3)
-    t_filtered_k = (p_filtered_pa * kin.volume_m3) / (trapped_mass_kg * r_spec)
+    # Fired cycle starting at the predicted SOC, then synthetic measurement noise + filtering
+    p_fired = single_zone_cycle(p_ivc, t_ivc, q_fuel, soc_deg=ignition.theta_soc_deg)
+    p_measured = p_fired + rng.normal(0.0, 3_500.0, size=p_fired.shape)
+    p_filtered = savgol_zero_phase(p_measured, window_length=31, polyorder=3)
+    t_filtered = p_filtered * kin.volume_m3 / (mass * r_air)
 
-    # Woschni (1967) wall heat-transfer & Heywood (2018) inverse First-Law AHRR
-    p_motored_arr = p_ivc_pa * ((v_ivc_m3 / kin.volume_m3) ** 1.35)
-    woschni = WoschniCorrelation(
-        bore_m=geom.bore_m,
-        stroke_m=geom.stroke_m,
-        rpm=engine_speed_rpm,
-        wall_temp_k=wall_temp_k,
-        displaced_volume_m3=geom.displaced_volume_m3,
-    )
-    ht_res = woschni.evaluate(
-        p_filtered_pa,
-        t_filtered_k,
+    v_ivc = float(kin.volume_m3[0])
+    heat_transfer = WoschniCorrelation(
+        bore_m=GEOMETRY.bore_m,
+        stroke_m=GEOMETRY.stroke_m,
+        rpm=ENGINE_SPEED_RPM,
+        wall_temp_k=WALL_TEMPERATURE_K,
+        displaced_volume_m3=GEOMETRY.displaced_volume_m3,
+    ).evaluate(
+        p_filtered,
+        t_filtered,
         kin.wall_area_m2,
-        motored_pressure_pa=p_motored_arr,
-        p_ref_pa=p_ivc_pa,
-        v_ref_m3=v_ivc_m3,
-        t_ref_k=t_ivc_k,
+        motored_pressure_pa=p_ivc * (v_ivc / kin.volume_m3) ** 1.35,
+        p_ref_pa=p_ivc,
+        v_ref_m3=v_ivc,
+        t_ref_k=t_ivc,
     )
-    hrr_res = compute_heat_release(
-        theta_deg,
-        p_filtered_pa,
+    hrr = compute_heat_release(
+        THETA,
+        p_filtered,
         kin.volume_m3,
-        temperature_k=t_filtered_k,
+        temperature_k=t_filtered,
         dv_dtheta_m3_per_deg=kin.dv_dtheta_m3_per_deg,
-        dq_ht_j_per_deg=ht_res.dq_ht_j_per_deg,
+        dq_ht_j_per_deg=heat_transfer.dq_ht_j_per_deg,
         mixture=DRY_AIR,
     )
-    burn_res = extract_burn_fractions(
-        theta_deg,
-        hrr_res.dq_gross_j_per_deg,
-        start_deg=-12.0,
-        end_deg=65.0,
-    )
-    imep_res = compute_imep(
-        theta_deg,
-        p_filtered_pa,
+    burn = extract_burn_fractions(THETA, hrr.dq_gross_j_per_deg, start_deg=-15.0, end_deg=70.0)
+    imep = compute_imep(
+        THETA,
+        p_filtered,
         kin.volume_m3,
-        displaced_volume_m3=geom.displaced_volume_m3,
+        displaced_volume_m3=GEOMETRY.displaced_volume_m3,
         dv_dtheta_m3_per_deg=kin.dv_dtheta_m3_per_deg,
     )
 
-    # In-cylinder gas density at Start of Injection (-8 deg ATDC) for spray scaling
-    soi_idx = int(np.argmin(np.abs(theta_deg - (-8.0))))
-    rho_soi = float(trapped_mass_kg / kin.volume_m3[soi_idx])
-
-    # High-pressure Jet-A1/Diesel spray evaluation over [0, 0.85 ms]
-    t_spray_s = np.linspace(1.0e-6, 0.85e-3, 300, dtype=np.float64)
-    delta_p_inj_pa = 100.0e6
-    rho_fuel_kg_m3 = 810.0
-    nozzle_d_m = 90.0e-6
-    spray_cone_deg = 19.0
-
-    ha_res = hiroyasu_arai_penetration(
-        t_spray_s,
-        delta_p_pa=delta_p_inj_pa,
-        rho_liquid_kg_m3=rho_fuel_kg_m3,
-        rho_gas_kg_m3=rho_soi,
-        nozzle_diameter_m=nozzle_d_m,
-    )
-    ns_res = naber_siebers_penetration(
-        t_spray_s,
-        delta_p_pa=delta_p_inj_pa,
-        rho_liquid_kg_m3=rho_fuel_kg_m3,
-        rho_gas_kg_m3=rho_soi,
-        nozzle_diameter_m=nozzle_d_m,
-        spray_angle_deg=spray_cone_deg,
-    )
-
-    # Synthetic ANSYS Forte 3D CFD discrete spray samples (14 RANS output checkpoints)
-    t_cfd_s = np.linspace(0.05e-3, 0.85e-3, 14, dtype=np.float64)
-    ha_cfd_ref = hiroyasu_arai_penetration(
-        t_cfd_s,
-        delta_p_pa=delta_p_inj_pa,
-        rho_liquid_kg_m3=rho_fuel_kg_m3,
-        rho_gas_kg_m3=rho_soi,
-        nozzle_diameter_m=nozzle_d_m,
-    )
-    ns_cfd_ref = naber_siebers_penetration(
-        t_cfd_s,
-        delta_p_pa=delta_p_inj_pa,
-        rho_liquid_kg_m3=rho_fuel_kg_m3,
-        rho_gas_kg_m3=rho_soi,
-        nozzle_diameter_m=nozzle_d_m,
-        spray_angle_deg=spray_cone_deg,
-    )
-    cfd_pen_m = (
-        0.62 * ha_cfd_ref.penetration_m
-        + 0.38 * ns_cfd_ref.penetration_m
-        + rng.normal(0.0, 0.35e-3, size=t_cfd_s.shape)
-    )
-    spray_val_metrics = compute_spray_validation_metrics(
-        cfd_pen_m,
-        ha_res.penetration_m,
-        cfd_time_s=t_cfd_s,
-        ref_time_s=t_spray_s,
-    )
-
-    # Wall impingement onset relative to piston bowl radius (L_wall = 38.0 mm)
-    risk_res = evaluate_altitude_spray_risk(
-        t_spray_s,
-        delta_p_pa=delta_p_inj_pa,
-        rho_liquid_kg_m3=rho_fuel_kg_m3,
-        rho_gas_sea_level_kg_m3=max(rho_soi, 26.0),
-        rho_gas_altitude_kg_m3=rho_soi,
-        nozzle_diameter_m=nozzle_d_m,
-        wall_distance_m=bowl_wall_distance_m,
-        model="hiroyasu_arai",
-    )
-
-    label_str = (
-        f"Sea Level (0 ft)"
-        if altitude_ft == 0.0
-        else f"{int(altitude_ft):,} ft ({alt_m:,.0f} m)"
-    )
-    spray_case = AltitudeSprayPlotCase(
-        label=label_str,
-        rho_gas_kg_m3=rho_soi,
-        time_s=t_spray_s,
-        hiroyasu_penetration_m=ha_res.penetration_m,
-        siebers_penetration_m=ns_res.penetration_m,
-        cfd_time_s=t_cfd_s,
-        cfd_penetration_m=cfd_pen_m,
-        impingement_time_s=risk_res.impingement_time_s,
-    )
-
-    # Three-grid ASME V&V 20-2009 mesh independence study for Peak Cylinder Pressure
-    grid_sizes = compute_grid_size(
-        cell_counts=(1_920_000.0, 680_000.0, 235_000.0),
-        domain_volume_m3=float(np.max(kin.volume_m3)),
-    )
-    p_peak_true = float(np.max(p_filtered_pa))
-    # Realistic 2nd-order RANS spatial truncation error (~0.85% on fine mesh, p_eff ~ 1.92)
-    c_mesh = -0.0085 * p_peak_true / (grid_sizes.h1**1.92)
-    phi1_pa = p_peak_true + c_mesh * (grid_sizes.h1**1.92)
-    phi2_pa = p_peak_true + c_mesh * (grid_sizes.h2**1.92)
-    phi3_pa = p_peak_true + c_mesh * (grid_sizes.h3**1.92)
-    gci_res = compute_gci(phi1_pa, phi2_pa, phi3_pa, grid=grid_sizes)
-
-    # Dynamic Livengood-Wu (1955) auto-ignition delay & SOC with Jet-A1 kinetics
-    jet_a1 = PREDEFINED_FUELS["JET_A1_JP8"]
-    phi_overall = float((injected_fuel_kg * afr_stoich) / trapped_mass_kg)
-    lw_res = livengood_wu_integral(
-        theta_deg,
-        p_filtered_pa,
-        t_filtered_k,
-        engine_speed_rpm,
-        theta_soi_deg=-8.0,
-        equivalence_ratio=phi_overall,
-        cetane_number=jet_a1.cetane_number,
-    )
-
-    # Second-Law exergy budget & altitude dead-state (P0(z), T0(z)) analysis
-    dead_state = DeadStateConditions.from_altitude(alt_m)
-    dq_ht_arr = np.maximum(hrr_res.dq_gross_j_per_deg - hrr_res.dq_net_j_per_deg, 0.0)
-    exergy_rates = compute_exergy_rates(
-        theta_deg,
-        p_filtered_pa,
-        t_filtered_k,
+    rates = compute_exergy_rates(
+        THETA,
+        p_filtered,
+        t_filtered,
         kin.volume_m3,
         kin.dv_dtheta_m3_per_deg,
-        hrr_res.dq_gross_j_per_deg,
-        dq_ht_arr,
-        dead_state,
-        trapped_mass_kg,
-        wall_temperature_k=wall_temp_k,
+        hrr.dq_gross_j_per_deg,
+        heat_transfer.dq_ht_j_per_deg,
+        DeadStateConditions.from_altitude(altitude_m),
+        mass,
+        wall_temperature_k=WALL_TEMPERATURE_K,
+        phi_factor=JET_A1_EXERGY_FACTOR,
         gas_mixture=DRY_AIR,
     )
-    exergy_budget = compute_exergy_cycle_budget(
-        exergy_rates,
-        fuel_mass_kg=injected_fuel_kg,
-        lhv_j_per_kg=lhv_jet_a1_j_per_kg,
+    exergy = compute_exergy_cycle_budget(
+        rates,
+        fuel_mass_kg=fuel_mass,
+        lhv_j_per_kg=JET_A1_SURROGATE.lhv_j_per_kg,
+        phi_factor=JET_A1_EXERGY_FACTOR,
     )
 
-    return AltitudeScenarioSummary(
-        label=label_str,
+    soi_index = int(np.argmin(np.abs(THETA - THETA_SOI_DEG)))
+    label = "Sea level (0 ft)" if altitude_ft == 0.0 else f"{altitude_ft:,.0f} ft"
+    return AltitudeCase(
+        label=label,
         altitude_ft=altitude_ft,
-        altitude_m=alt_m,
-        t_amb_k=t_amb_k,
-        p_amb_kpa=p_amb_pa * 1.0e-3,
-        rho_amb_kg_m3=rho_amb,
-        p_ivc_kpa=p_ivc_pa * 1.0e-3,
-        t_ivc_k=t_ivc_k,
-        rho_soi_kg_m3=rho_soi,
-        q_fuel_j=q_fuel_j,
-        theta_deg=theta_deg,
+        p_ambient_pa=p_amb,
+        p_ivc_pa=p_ivc,
+        t_ivc_k=t_ivc,
+        rho_soi_kg_m3=float(mass / kin.volume_m3[soi_index]),
+        fuel_mass_kg=fuel_mass,
+        ignition=ignition,
+        pressure_pa=p_filtered,
         volume_m3=kin.volume_m3,
-        pressure_pa=p_filtered_pa,
-        hrr=hrr_res,
-        burn=burn_res,
-        imep=imep_res,
-        spray_plot_case=spray_case,
-        spray_metrics=spray_val_metrics,
-        wall_impingement=risk_res.wall_impingement_detected,
-        impingement_time_ms=(
-            risk_res.impingement_time_s * 1.0e3
-            if risk_res.impingement_time_s is not None
-            else None
-        ),
-        gci=gci_res,
-        lw=lw_res,
-        exergy=exergy_budget,
+        hrr=hrr,
+        burn=burn,
+        imep=imep,
+        exergy=exergy,
     )
 
 
-def _print_summary_table(results: list[AltitudeScenarioSummary]) -> None:
-    """Print an engineering summary table of thermodynamic, spray, ignition, exergy, and GCI metrics."""
-    sep = "=" * 140
-    print("\n" + sep)
+def spray_case(case: AltitudeCase, rho_sea_level: float) -> tuple[AltitudeSprayPlotCase, float | None]:
+    """Spray tip penetration curves and the time the tip reaches the bowl wall."""
+    t_spray = np.linspace(1.0e-6, 0.85e-3, 300, dtype=np.float64)
+    common = dict(
+        delta_p_pa=INJECTION_DELTA_P_PA,
+        rho_liquid_kg_m3=FUEL_DENSITY_KG_M3,
+        nozzle_diameter_m=NOZZLE_DIAMETER_M,
+    )
+    ha = hiroyasu_arai_penetration(t_spray, rho_gas_kg_m3=case.rho_soi_kg_m3, **common)
+    ns = naber_siebers_penetration(
+        t_spray, rho_gas_kg_m3=case.rho_soi_kg_m3, spray_angle_deg=SPRAY_CONE_DEG, **common
+    )
+    risk = evaluate_altitude_spray_risk(
+        t_spray,
+        rho_gas_sea_level_kg_m3=rho_sea_level,
+        rho_gas_altitude_kg_m3=case.rho_soi_kg_m3,
+        wall_distance_m=BOWL_WALL_DISTANCE_M,
+        model="hiroyasu_arai",
+        **common,
+    )
+    plot_case = AltitudeSprayPlotCase(
+        label=case.label,
+        rho_gas_kg_m3=case.rho_soi_kg_m3,
+        time_s=t_spray,
+        hiroyasu_penetration_m=ha.penetration_m,
+        siebers_penetration_m=ns.penetration_m,
+        impingement_time_s=risk.impingement_time_s,
+    )
+    return plot_case, risk.impingement_time_s
+
+
+def manufactured_gci_example(p_max_pa: float):  # noqa: ANN201 - returns GCIResult
+    """Three-grid GCI on a manufactured second-order triplet (illustration only)."""
+    grid = compute_grid_size(cell_counts=(1_920_000.0, 680_000.0, 235_000.0))
+    order = 1.92
+    coefficient = -0.0085 * p_max_pa / grid.h1**order
+    phi = [p_max_pa + coefficient * h**order for h in (grid.h1, grid.h2, grid.h3)]
+    return compute_gci(phi[0], phi[1], phi[2], grid=grid, formal_order=2.0)
+
+
+def print_summary(cases: list[AltitudeCase], tip_times: list[float | None]) -> None:
+    """Print the synthetic results table (Markdown)."""
+    print("\nSYNTHETIC DEMONSTRATION - textbook models only, not engineering results\n")
     print(
-        "  ICE-CFD-VALIDATION-ASSISTANT | AERO-DIESEL MULTI-PHYSICS ALTITUDE SWEEP & ASME V&V SUMMARY"
+        "| Altitude | p_amb [kPa] | p_IVC [kPa] | rho_SOI [kg/m3] | Ignition delay [deg / ms] "
+        "| SOC [deg ATDC] | p_max [MPa] | IMEP_net [bar] | CA50 [deg ATDC] | Tip at 38 mm [ms] "
+        "| eta_II [%] | Exergy closure error [%] |"
     )
-    print(sep)
-    header = (
-        f"{'Altitude Scenario':<20} | {'P_amb':>7} | {'rho_SOI':>7} | {'P_max':>6} | "
-        f"{'IMEP_n':>6} | {'CA50':>6} | {'tau_id':>10} | {'SOC_LW':>7} | "
-        f"{'S_max':>5} | {'Piston Bowl':>11} | {'eta_II':>7} | {'E_dest':>7} | {'GCI_fine':>8}"
-    )
-    units = (
-        f"{'(ISA ISO 2533)':<20} | {'[kPa]':>7} | {'[kg/m3]':>7} | {'[MPa]':>6} | "
-        f"{'[bar]':>6} | {'[deg]':>6} | {'[deg|ms]':>10} | {'[deg]':>7} | "
-        f"{'[mm]':>5} | {'(L=38mm)':>11} | {'[%]':>7} | {'[%]':>7} | {'[%]':>8}"
-    )
-    print(header)
-    print(units)
-    print("-" * 140)
-
-    for r in results:
-        p_max_mpa = float(np.max(r.pressure_pa)) * 1.0e-6
-        imep_bar = r.imep.imep_net_pa * 1.0e-5
-        s_max_mm = float(np.max(r.spray_plot_case.hiroyasu_penetration_m)) * 1.0e3
-        imp_str = (
-            f"t={r.impingement_time_ms:.2f} ms"
-            if r.impingement_time_ms is not None
-            else "SAFE"
-        )
-        tau_str = f"{r.lw.ignition_delay_deg:.1f}d|{r.lw.ignition_delay_s * 1.0e3:.2f}m"
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for case, tip in zip(cases, tip_times):
+        ign = case.ignition
+        tip_str = f"{tip * 1e3:.2f}" if tip is not None else "not reached"
+        closure = 100.0 * case.exergy.closure_error_j / case.exergy.e_released_j
         print(
-            f"{r.label:<20} | {r.p_amb_kpa:7.2f} | {r.rho_soi_kg_m3:7.2f} | "
-            f"{p_max_mpa:6.2f} | {imep_bar:6.2f} | {r.burn.ca50_deg:6.2f} | "
-            f"{tau_str:>10} | {r.lw.theta_soc_deg:7.2f} | "
-            f"{s_max_mm:5.1f} | {imp_str:>11} | {r.exergy.eta_second_law * 100.0:6.2f}% | "
-            f"{r.exergy.destruction_share_pct:6.2f}% | {r.gci.gci_fine_21 * 100.0:7.3f}%"
+            f"| {case.label} | {case.p_ambient_pa * 1e-3:.1f} | {case.p_ivc_pa * 1e-3:.1f} "
+            f"| {case.rho_soi_kg_m3:.1f} | {ign.ignition_delay_deg:.1f} / {ign.ignition_delay_s * 1e3:.2f} "
+            f"| {ign.theta_soc_deg:+.2f} | {float(np.max(case.pressure_pa)) * 1e-6:.2f} "
+            f"| {case.imep.imep_net_pa * 1e-5:.2f} | {case.burn.ca50_deg:.2f} | {tip_str} "
+            f"| {case.exergy.eta_second_law * 100:.1f} | {closure:.2f} |"
         )
-    print(sep + "\n")
+    print()
 
 
 def main() -> None:
-    """Execute the 3-altitude Aero-Diesel validation sweep and export 300-DPI figures."""
-    geom = SliderCrankGeometry(
-        bore_m=0.085,
-        stroke_m=0.090,
-        conrod_m=0.155,
-        compression_ratio=16.5,
+    """Run the three altitude cases and export the figures to ``assets/``."""
+    rng = np.random.default_rng(42)
+    cases = [run_altitude_case(alt, rng) for alt in (0.0, 15_000.0, 30_000.0)]
+    sprays = [spray_case(c, rho_sea_level=cases[0].rho_soi_kg_m3) for c in cases]
+    print_summary(cases, [tip for _, tip in sprays])
+
+    gci = manufactured_gci_example(float(np.max(cases[0].pressure_pa)))
+    print(
+        f"Manufactured GCI example: p = {gci.apparent_order_p:.3f} (order used {gci.order_used_p:.2f}), "
+        f"GCI_fine = {gci.gci_fine_21 * 100:.3f} %\n"
     )
-    bowl_wall_distance_m = 0.038
 
-    altitudes_ft = [0.0, 15_000.0, 30_000.0]
-    summaries = [
-        simulate_aero_diesel_altitude_case(
-            alt_ft,
-            geom,
-            bowl_wall_distance_m=bowl_wall_distance_m,
-        )
-        for alt_ft in altitudes_ft
-    ]
-
-    _print_summary_table(summaries)
-
-    assets_dir = _REPO_ROOT / "assets"
-    assets_dir.mkdir(parents=True, exist_ok=True)
-
-    sl, mid, high = summaries[0], summaries[1], summaries[2]
-
-    # 1. Three-panel thermodynamic cycle diagnostics (Sea Level + 15k/30k overlays)
-    thermo_path = assets_dir / "thermo_diagnostics.png"
+    assets = _REPO_ROOT / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    sl, mid, high = cases
+    tag = " (synthetic)"
     plot_thermo_diagnostics(
-        sl.theta_deg,
+        THETA,
         sl.pressure_pa,
         sl.hrr,
         sl.burn,
-        primary_label=sl.label,
+        primary_label=sl.label + tag,
         overlay_traces=[
-            ThermoOverlayTrace(
-                label=mid.label,
-                theta_deg=mid.theta_deg,
-                pressure_pa=mid.pressure_pa,
-                hrr_result=mid.hrr,
-                burn_metrics=mid.burn,
-            ),
-            ThermoOverlayTrace(
-                label=high.label,
-                theta_deg=high.theta_deg,
-                pressure_pa=high.pressure_pa,
-                hrr_result=high.hrr,
-                burn_metrics=high.burn,
-            ),
+            ThermoOverlayTrace(c.label + tag, THETA, c.pressure_pa, c.hrr, c.burn) for c in (mid, high)
         ],
-        save_path=thermo_path,
-        dpi=300,
+        save_path=assets / "thermo_diagnostics.png",
     )
-
-    # 2. Logarithmic P-V diagram & polytropic exponent verification
-    pv_path = assets_dir / "pv_log_diagram.png"
     plot_pv_log_diagram(
         sl.volume_m3,
         sl.pressure_pa,
-        sl.theta_deg,
-        primary_label=sl.label,
-        overlay_loops=[
-            (mid.label, mid.volume_m3, mid.pressure_pa),
-            (high.label, high.volume_m3, high.pressure_pa),
-        ],
-        save_path=pv_path,
-        dpi=300,
+        THETA,
+        primary_label=sl.label + tag,
+        overlay_loops=[(c.label + tag, c.volume_m3, c.pressure_pa) for c in (mid, high)],
+        save_path=assets / "pv_log_diagram.png",
     )
-
-    # 3. High-altitude spray penetration & wall-impingement risk chart
-    spray_path = assets_dir / "altitude_spray_comparison.png"
     plot_altitude_spray_comparison(
-        [s.spray_plot_case for s in summaries],
-        wall_distance_m=bowl_wall_distance_m,
-        save_path=spray_path,
-        dpi=300,
+        [s for s, _ in sprays],
+        wall_distance_m=BOWL_WALL_DISTANCE_M,
+        save_path=assets / "altitude_spray_comparison.png",
     )
-
-    # 4. ASME V&V 20-2009 3-mesh GCI convergence & Richardson extrapolation chart
-    gci_path = assets_dir / "gci_convergence.png"
     plot_gci_convergence(
-        sl.gci,
-        metric_name=r"Sea-Level Peak Cylinder Pressure, $P_{\max}$",
+        gci,
+        metric_name=r"Manufactured example: $P_{\max}$",
         metric_unit="MPa",
         scale_factor=1.0e-6,
-        save_path=gci_path,
-        dpi=300,
+        save_path=assets / "gci_convergence.png",
     )
-
-    print("Saved 300-DPI SAE/IEEE publication figures:")
-    for p in (thermo_path, pv_path, spray_path, gci_path):
-        size_kb = p.stat().st_size / 1024.0
-        print(f"  [OK] {p.relative_to(_REPO_ROOT).as_posix()} ({size_kb:.1f} KB)")
+    for name in ("thermo_diagnostics", "pv_log_diagram", "altitude_spray_comparison", "gci_convergence"):
+        print(f"  saved assets/{name}.png")
 
 
 if __name__ == "__main__":

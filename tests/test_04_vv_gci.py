@@ -208,6 +208,6 @@ class TestStrictAuditVVGCI:
         assert amr_gci.convergence_regime == "OSCILLATORY"
         assert math.isfinite(amr_gci.apparent_order_p) and math.isfinite(amr_gci.gci_fine_21)
 
-    def test_audit_vv_vectorization_and_typing(self) -> None:
+    def test_audit_vv_type_check(self) -> None:
         """AUDIT: pyrefly static type check of the vv/ package."""
         assert_package_type_checks("vv")

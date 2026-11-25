@@ -43,8 +43,10 @@ from combusta.vv.gci import GCIResult
 FloatArray: TypeAlias = NDArray[np.float64]
 
 #: Coverage factor relating a three-grid GCI (Fs = 1.25) to a standard uncertainty.
-#: The GCI is treated as an expanded uncertainty at roughly 95 % coverage. V&V 20
-#: discusses this conversion; the value is a user choice and must be reported.
+#: The GCI is treated as an expanded uncertainty at roughly 95 % coverage. NIST IR 8298
+#: (2020), summarizing V&V 20, gives k ≈ 2 for a Gaussian error distribution about the
+#: fine-grid solution and k ≈ 1.1-1.15 for a shifted one; 1.15 is the more conservative
+#: (larger u_num) end of the latter. The value is a user choice and must be reported.
 DEFAULT_GCI_COVERAGE_FACTOR: Final[float] = 1.15
 
 #: Coverage factor for a ~95 % interval of an approximately normal distribution.

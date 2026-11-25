@@ -322,7 +322,7 @@ def blend_burned_unburned(
 
     A single-zone charge is treated as an ideal mixture of unburned and burned gas
     at the common temperature $T$; mass-specific properties mix linearly in mass
-    fraction (Gatowski et al., 1984, SAE 840359; Heywood, 2018, Sec. 9.2):
+    fraction (Gatowski et al., 1984, SAE 841359; Heywood, 2018, Sec. 9.2):
 
     $$c_p = (1 - x_b) c_{p,u}(T) + x_b c_{p,b}(T), \\qquad
       R = (1 - x_b) R_u + x_b R_b, \\qquad \\gamma = \\frac{c_p}{c_p - R}$$
