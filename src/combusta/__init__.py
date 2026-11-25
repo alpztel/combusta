@@ -3,6 +3,16 @@
 from __future__ import annotations
 
 from combusta.case import CaseSource, CycleTrace, EngineCase, OperatingPoint
+from combusta.compare import (
+    METRIC_SPECS,
+    CaseComparison,
+    ComparisonRow,
+    CycleMetrics,
+    MetricSpec,
+    compare_cases,
+    compute_cycle_metrics,
+    uncertainty_from_gci,
+)
 from combusta.constants import (
     FEET_TO_M,
     MOLAR_MASS_DRY_AIR,
@@ -146,6 +156,14 @@ from combusta.vv import (
 __version__ = "0.2.0"
 
 __all__ = [
+    "METRIC_SPECS",
+    "CaseComparison",
+    "ComparisonRow",
+    "CycleMetrics",
+    "MetricSpec",
+    "compare_cases",
+    "compute_cycle_metrics",
+    "uncertainty_from_gci",
     "CaseSource",
     "CycleTrace",
     "EngineCase",

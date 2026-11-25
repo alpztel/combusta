@@ -107,7 +107,7 @@ class CycleTrace:
         Cylinder pressure $P(\\theta)$ [Pa].
     volume_m3, temperature_k, wall_heat_loss_j_per_deg : ArrayLike | None
         Optional volume [m^3], mass-averaged temperature [K], and wall heat-loss rate
-        [J/deg] on the same crank-angle grid.
+        [J/deg, positive = heat leaving the gas] on the same crank-angle grid.
     channels : Mapping[str, ArrayLike]
         Additional named signals on the same grid (e.g. ``"NO_ppm"``).
     """
@@ -248,8 +248,16 @@ class EngineCase:
         operating_point: OperatingPoint,
         scalars: Mapping[str, float] | None = None,
         metadata: Mapping[str, str] | None = None,
+        wall_heat_loss_sign: float = 1.0,
     ) -> EngineCase:
-        """Build a CFD case from a parsed ANSYS Forte ``thermo.csv``."""
+        """Build a CFD case from a parsed ANSYS Forte ``thermo.csv``.
+
+        ``wall_heat_loss_sign`` converts the exported wall heat-transfer column to the
+        Combusta convention (positive = heat leaving the gas). Pass ``-1.0`` if the
+        export reports heat loss as negative; check it on the first real case.
+        """
+        if wall_heat_loss_sign not in (1.0, -1.0):
+            raise ValueError("wall_heat_loss_sign must be +1.0 or -1.0.")
         meta = dict(metadata or {})
         if thermo.source_units:
             meta.update({f"unit:{k}": v for k, v in thermo.source_units.items()})
@@ -258,8 +266,13 @@ class EngineCase:
             pressure_pa=thermo.pressure_pa,
             volume_m3=thermo.volume_m3,
             temperature_k=thermo.temperature_k,
-            wall_heat_loss_j_per_deg=thermo.wall_heat_loss_j_per_deg,
+            wall_heat_loss_j_per_deg=(
+                None
+                if thermo.wall_heat_loss_j_per_deg is None
+                else wall_heat_loss_sign * thermo.wall_heat_loss_j_per_deg
+            ),
         )
+        meta["wall_heat_loss_sign"] = f"{wall_heat_loss_sign:+.0f}"
         return cls(
             name=name,
             geometry=geometry,

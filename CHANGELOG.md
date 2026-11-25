@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `blend_burned_unburned`: mass-weighted unburned/burned gas properties at mass fraction burned x<sub>b</sub>.
 - `compute_heat_release(..., burned_mixture=...)`: x<sub>b</sub>-dependent γ resolved by fixed-point iteration (Gatowski et al., 1984; Brunt et al., 1998). Results expose `mass_fraction_burned` and `property_iterations`.
 - `combusta.case`: source-independent `EngineCase`, `OperatingPoint`, and `CycleTrace`, with `EngineCase.from_forte_thermo`, provenance (`source`, including `"synthetic"` for verification fixtures), ideal-gas temperature reconstruction, and a geometry/volume consistency check that detects crank-angle offsets.
+- `combusta.compare`: `compute_cycle_metrics` (peak pressure and phasing, max. pressure-rise rate, gross/net IMEP, gross indicated power, efficiency and ISFC, CA10/50/90, heat release) and `compare_cases` with baseline differences, significance against the combined numerical uncertainty U<sub>Δ</sub> = √(U<sub>a</sub>² + U<sub>b</sub>²), Markdown/DataFrame output, and a banner for synthetic data. `uncertainty_from_gci` converts a GCI result into an absolute uncertainty and rejects divergent triplets.
+- Combustion plausibility check (net vs. absolute apparent heat release) so motored or misfiring traces do not yield spurious CA50 values.
+- `EngineCase.from_forte_thermo(..., wall_heat_loss_sign=...)` to align the exported wall heat-loss sign with the Combusta convention (positive = heat leaving the gas).
+- `tests/test_09_case_comparison.py`: Otto-cycle efficiency limit, analytical Wiebe CA10/50/90, zero work of a reversible motored cycle, and the GCI bound on a power-law triplet.
 - `tests/test_08_fuels_and_case.py`: checks against NIST-JANAF/ATcT data and Heywood (2018) stoichiometry, element conservation, and a manufactured-solution verification of the x<sub>b</sub>-dependent heat release.
 
 ## [0.2.0] - 2026-11-08
