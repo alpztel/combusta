@@ -119,7 +119,7 @@ def _cumulative_integral(theta_w: FloatArray, f_w: FloatArray) -> FloatArray:
         anti = CubicSpline(theta_w, f_w, bc_type="not-a-knot").antiderivative()
         cum = np.asarray(anti(theta_w), dtype=np.float64) - float(anti(theta_w[0]))
     else:
-        cum = np.asarray(cumulative_trapezoid(f_w, theta_w, initial=0.0), dtype=np.float64)
+        cum = np.asarray(cumulative_trapezoid(f_w, theta_w, initial=0), dtype=np.float64)
     # Guarantee monotonicity (no-op for any well-resolved positive integrand)
     return np.maximum.accumulate(cum)
 

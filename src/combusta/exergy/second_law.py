@@ -346,11 +346,11 @@ def compute_exergy_rates(
     # 5. Exergy destruction rate: dE_dest / dtheta = dE_in - dE_W - dE_Q,loss - dE_tm
     de_dest_dtheta = de_in_dtheta - de_work_dtheta - de_heat_loss_dtheta - de_tm_dtheta
 
-    # Cumulative integrals via trapezoidal rule with initial=0.0
-    cum_work = np.asarray(cumulative_trapezoid(de_work_dtheta, theta, initial=0.0), dtype=np.float64)
-    cum_heat_loss = np.asarray(cumulative_trapezoid(de_heat_loss_dtheta, theta, initial=0.0), dtype=np.float64)
-    cum_in = np.asarray(cumulative_trapezoid(de_in_dtheta, theta, initial=0.0), dtype=np.float64)
-    cum_dest = np.asarray(cumulative_trapezoid(de_dest_dtheta, theta, initial=0.0), dtype=np.float64)
+    # Cumulative integrals via trapezoidal rule with initial=0
+    cum_work = np.asarray(cumulative_trapezoid(de_work_dtheta, theta, initial=0), dtype=np.float64)
+    cum_heat_loss = np.asarray(cumulative_trapezoid(de_heat_loss_dtheta, theta, initial=0), dtype=np.float64)
+    cum_in = np.asarray(cumulative_trapezoid(de_in_dtheta, theta, initial=0), dtype=np.float64)
+    cum_dest = np.asarray(cumulative_trapezoid(de_dest_dtheta, theta, initial=0), dtype=np.float64)
 
     return ExergyRatesResult(
         crank_angle_deg=theta,

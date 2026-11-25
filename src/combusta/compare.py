@@ -451,7 +451,7 @@ def compare_cases(
     names = tuple(c.name for c in cases)
     if len(set(names)) != len(names):
         raise ValueError(f"Case names must be unique, got {names}.")
-    base_idx = names.index(baseline) if isinstance(baseline, str) else int(baseline)
+    base_idx = names.index(baseline) if isinstance(baseline, str) else baseline
     if not 0 <= base_idx < len(cases):
         raise IndexError("baseline index out of range.")
     unc = uncertainties or {}

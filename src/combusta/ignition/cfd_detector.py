@@ -309,7 +309,7 @@ def detect_two_stage_ignition(
     theta_ntc, ntc_rate = _parabolic_vertex(theta_w, dq_w, i_ntc)
 
     q_pos = np.maximum(dq_w, 0.0)
-    q_cum = cumulative_trapezoid(q_pos, theta_w, initial=0.0)
+    q_cum = cumulative_trapezoid(q_pos, theta_w, initial=0)
     q_lthr = float(np.interp(theta_ntc, theta_w, q_cum))
     t_lthr = _NAN if temp is None else float(np.interp(theta_lthr, theta, temp))
 
@@ -430,7 +430,7 @@ def extract_cfd_ignition_metrics(
             q_evap = _spline_integral(theta_e, np.maximum(-dq_e, 0.0))
 
     # ------------------------------------------- Criterion 2: cumulative positive heat
-    q_cum = cumulative_trapezoid(np.maximum(dq_w, 0.0), theta_w, initial=0.0)
+    q_cum = cumulative_trapezoid(np.maximum(dq_w, 0.0), theta_w, initial=0)
     q_total = float(q_cum[-1])
     if q_total > 0.0:
         mfb = q_cum / q_total
