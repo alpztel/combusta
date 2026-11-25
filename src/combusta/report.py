@@ -27,9 +27,18 @@ from combusta.plotting.publication_plots import (
     CaseOverlayTrace,
     SweepPlotSeries,
     plot_case_overlay,
+    plot_pre_chamber,
     plot_sweep_overview,
 )
+from combusta.prechamber import (
+    PreChamberMetrics,
+    PreChamberResult,
+    analyze_pre_chamber,
+    estimate_discharge_coefficient,
+    pre_chamber_metrics,
+)
 from combusta.sweep import MatchedComparison, Sweep, build_sweep, compare_matched
+from combusta.thermo.fuels import make_reactant_mixture
 
 VOLUME_CONSISTENCY_WARNING: Final[float] = 0.01
 """Relative traced-vs-geometric volume deviation above which the report warns [-]."""
@@ -412,4 +421,172 @@ def write_matched_report(
         comparison=comparison, sweeps=sweeps, cases=loaded, markdown=markdown,
         report_path=report_path, metrics_path=metrics_path, figure_path=figure_path,
         warnings=tuple(warnings),
+    )
+
+
+PRE_CHAMBER_REPORT_FILE: Final[str] = "prechamber_report.md"
+PRE_CHAMBER_METRICS_FILE: Final[str] = "prechamber_metrics.csv"
+PRE_CHAMBER_FIGURE_FILE: Final[str] = "prechamber.png"
+
+_PRE_CHAMBER_DISPLAY: Final[tuple[tuple[str, str, str, float], ...]] = (
+    ("dp_max_pa", "Peak pressure difference p_pc - p_mc", "bar", 1e-5),
+    ("theta_dp_max_deg", "Crank angle of peak pressure difference", "deg ATDC", 1.0),
+    ("dp_min_pa", "Most negative pressure difference (flow into the pre-chamber)", "bar", 1e-5),
+    ("theta_dp_min_deg", "Crank angle of most negative pressure difference", "deg ATDC", 1.0),
+    ("jet_start_deg", "Jet start (Δp > 0)", "deg ATDC", 1.0),
+    ("jet_end_deg", "Jet end", "deg ATDC", 1.0),
+    ("jet_mass_kg", "Mass leaving the pre-chamber during the jet", "mg", 1e6),
+    ("jet_mass_fraction", "Jet mass / pre-chamber mass at jet start", "%", 100.0),
+    ("peak_jet_rate_kg_per_s", "Peak jet mass flow", "g/s", 1e3),
+    ("choked_fraction", "Share of the jet interval with choked flow", "%", 100.0),
+    ("q_pc_gross_j", "Pre-chamber gross heat release", "J", 1.0),
+    ("q_mc_gross_j", "Main-chamber gross heat release", "J", 1.0),
+    ("pc_energy_share", "Pre-chamber share of the heat release", "%", 100.0),
+    ("pc_ca50_deg", "Pre-chamber CA50", "deg ATDC", 1.0),
+    ("mc_ca10_deg", "Main-chamber CA10", "deg ATDC", 1.0),
+    ("mc_ca50_deg", "Main-chamber CA50", "deg ATDC", 1.0),
+    ("mc_ca90_deg", "Main-chamber CA90", "deg ATDC", 1.0),
+)
+
+
+def analyze_case_pre_chamber(loaded: LoadedCase) -> PreChamberResult:
+    """Two-volume analysis of a case file with a ``[pre_chamber]`` table.
+
+    The case trace is the main chamber. Zone masses come from the two temperature
+    traces when both exist, otherwise from the orifice model with the case's
+    ``trapped_mass_kg`` (total mass of both volumes). Both volumes use the unburned
+    charge of the case's fuel and λ (frozen composition).
+    """
+    pc = loaded.pre_chamber
+    if pc is None:
+        raise ValueError(f"{loaded.case.name}: the case file has no [pre_chamber] table.")
+    case, op = loaded.case, loaded.case.operating_point
+    if op.lambda_air is None:
+        raise ValueError(f"{case.name}: lambda_air is required for the pre-chamber gas model.")
+    mixture = make_reactant_mixture(op.fuel, op.lambda_air)
+    kinematics = case.kinematics()
+    temperatures = pc.temperature_k is not None and case.trace.temperature_k is not None
+    return analyze_pre_chamber(
+        case.trace.crank_angle_deg,
+        pc.pressure_pa,
+        case.trace.pressure_pa,
+        case.volume_m3(),
+        pc.geometry,
+        rpm=op.rpm,
+        mixture_pc=mixture,
+        mixture_mc=mixture,
+        pre_chamber_temperature_k=pc.temperature_k if temperatures else None,
+        main_chamber_temperature_k=case.trace.temperature_k if temperatures else None,
+        trapped_mass_kg=None if temperatures else op.trapped_mass_kg,
+        wall_heat_loss_pc_j_per_deg=pc.wall_heat_loss_j_per_deg,
+        wall_heat_loss_mc_j_per_deg=case.trace.wall_heat_loss_j_per_deg,
+        main_chamber_dv_dtheta_m3_per_deg=(
+            kinematics.dv_dtheta_m3_per_deg if case.trace.volume_m3 is None else None
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PreChamberReport:
+    """Result of :func:`write_pre_chamber_report`.
+
+    Attributes
+    ----------
+    case : LoadedCase
+        The analyzed case.
+    result : PreChamberResult
+        Crank-angle-resolved two-volume analysis.
+    metrics : PreChamberMetrics
+        Scalar metrics.
+    discharge_coefficient_estimate : float | None
+        $C_D$ fitted to the traced mass transfer (``None`` with the orifice model).
+    markdown : str
+        Report text.
+    report_path, metrics_path, figure_path : Path
+        Written files.
+    """
+
+    case: LoadedCase
+    result: PreChamberResult
+    metrics: PreChamberMetrics
+    discharge_coefficient_estimate: float | None
+    markdown: str
+    report_path: Path
+    metrics_path: Path
+    figure_path: Path
+
+
+def write_pre_chamber_report(
+    case_path: str | Path,
+    out_dir: str | Path,
+    *,
+    window_deg: tuple[float, float] = (-40.0, 90.0),
+    figure: bool = True,
+) -> PreChamberReport:
+    """Analyze a pre-chamber case file and write ``prechamber_report.md``, metrics CSV, and figure."""
+    loaded = load_case(case_path)
+    result = analyze_case_pre_chamber(loaded)
+    rpm = loaded.case.operating_point.rpm
+    metrics = pre_chamber_metrics(result, rpm=rpm, window_deg=window_deg)
+    cd_fit = estimate_discharge_coefficient(result) if result.mass_source == "trace" else None
+    pc = loaded.pre_chamber
+    assert pc is not None
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    figure_path = out / PRE_CHAMBER_FIGURE_FILE
+    if figure:
+        plot_pre_chamber(
+            result.crank_angle_deg, pc.pressure_pa, loaded.case.trace.pressure_pa,
+            result.transfer_rate_kg_per_deg * 6.0 * rpm,
+            result.dq_pc_gross_j_per_deg, result.dq_mc_gross_j_per_deg,
+            jet_window_deg=(metrics.jet_start_deg, metrics.jet_end_deg),
+            theta_limits_deg=window_deg, title=loaded.case.name, save_path=figure_path,
+        )
+
+    from combusta import __version__
+
+    values = metrics.as_dict()
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    geo = pc.geometry
+    lines = ["# Pre-chamber analysis", "", f"Generated by Combusta {__version__} on {stamp}.", ""]
+    if loaded.case.is_synthetic:
+        lines += ["> [!WARNING]",
+                  "> This case contains **synthetic verification data**. The numbers are not engineering results.", ""]
+    lines += ["## Case", "", *_provenance_table([loaded]), "",
+              f"- Pre-chamber signals: `{pc.file.name}` (SHA-256 `{pc.sha256[:16]}`)",
+              f"- Pre-chamber volume {geo.volume_m3 * 1e6:.4g} cm³; {geo.orifice_count} orifices of "
+              f"{geo.orifice_diameter_m * 1e3:.4g} mm (total area {geo.flow_area_m2 * 1e6:.4g} mm²); "
+              f"C_D = {geo.discharge_coefficient:g}",
+              f"- Mass exchange from: **{'zone temperature traces' if result.mass_source == 'trace' else 'orifice model with the trapped mass'}**",
+              ""]
+    lines += ["## Results", "", "| Metric | Unit | Value |", "|---|---|---|"]
+    for key, label, unit, factor in _PRE_CHAMBER_DISPLAY:
+        v = values[key]
+        lines.append(f"| {label} | {unit} | {'–' if not math.isfinite(v) else f'{v * factor:.4g}'} |")
+    lines.append("")
+    if cd_fit is not None:
+        lines += [f"Effective discharge coefficient fitted to the traced mass transfer: **{cd_fit:.3f}** "
+                  f"(case file: {geo.discharge_coefficient:g}). A large difference means the orifice model "
+                  "with the declared C_D does not reproduce the exported mass exchange.", ""]
+    lines += ["## Assumptions", "",
+              "- The case trace describes the main chamber only; the pre-chamber volume is not part of it.",
+              "- Each volume is one zone of uniform state with the frozen unburned-charge gas model; gas "
+              "entering a volume takes on that volume's gas model. With hydrogen this biases the absolute "
+              "heat release; timing quantities are less sensitive.",
+              "- Orifice flow is quasi-steady and isentropic with a constant discharge coefficient.", ""]
+    if figure:
+        lines += ["## Figure", "", f"![Pre-chamber analysis]({PRE_CHAMBER_FIGURE_FILE})", ""]
+    markdown = "\n".join(lines)
+    report_path = out / PRE_CHAMBER_REPORT_FILE
+    report_path.write_text(markdown + "\n", encoding="utf-8")
+    metrics_path = out / PRE_CHAMBER_METRICS_FILE
+    import pandas as pd
+
+    pd.DataFrame([{"metric": k, "label": label, "value_si": values[k], "display_unit": unit,
+                   "value_display": values[k] * f} for k, label, unit, f in _PRE_CHAMBER_DISPLAY]
+                 ).to_csv(metrics_path, index=False)
+    return PreChamberReport(
+        case=loaded, result=result, metrics=metrics, discharge_coefficient_estimate=cd_fit,
+        markdown=markdown, report_path=report_path, metrics_path=metrics_path, figure_path=figure_path,
     )

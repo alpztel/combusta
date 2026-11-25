@@ -126,6 +126,35 @@ p_max = 3.0e4
 ca50 = 0.3
 ```
 
+### `[pre_chamber]`
+
+Declares a pre-chamber engine for `combusta prechamber`. The case trace then describes the **main chamber only** (its pressure, volume, and optionally temperature and wall heat loss); the pre-chamber volume must not be part of it.
+
+| Key | Unit | Required | Meaning |
+| :--- | :--- | :---: | :--- |
+| `volume_m3` | m³ | yes | Pre-chamber volume including the orifices |
+| `orifice_count` | – | yes | Number of orifices |
+| `orifice_diameter_m` | m | yes | Orifice diameter |
+| `discharge_coefficient` | – | yes | $C_D$ in (0, 1]; no default, take it from measurement, CFD, or the fitted value in the report |
+| `file` | – | no | File with the pre-chamber signals; defaults to the trace file |
+
+`[pre_chamber.columns]` maps the pre-chamber signals with the same syntax as `[trace.columns]` (fields `crank_angle`, `pressure`, `temperature`, `wall_heat_loss`). If the signals are in the trace file itself, `pressure` must be mapped explicitly, otherwise the main-chamber pressure would be found by its alias. Signals on a different crank-angle grid are interpolated linearly onto the trace grid; they must cover it.
+
+Zone masses come from the pre-chamber and main-chamber temperatures when both are exported; otherwise the orifice model is integrated with `operating_point.trapped_mass_kg`, which is then the total mass of both volumes. `lambda_air` is required (gas model of both volumes).
+
+```toml
+[pre_chamber]
+volume_m3 = 1.0e-6
+orifice_count = 6
+orifice_diameter_m = 1.2e-3
+discharge_coefficient = 0.7
+file = "prechamber.csv"
+
+[pre_chamber.columns]
+pressure = "PC Pressure"
+temperature = "PC Temperature"
+```
+
 ### `[metadata]`
 
 Free-form strings stored with the case (solver version, mesh name, run date). The loader adds `case_file`, `trace_file`, `trace_format`, `trace_sha256`, the source unit of every column, and `wall_heat_loss_sign`.
@@ -133,6 +162,7 @@ Free-form strings stored with the case (solver version, mesh name, run date). Th
 ## Command line
 
 ```bash
+combusta prechamber prechamber_case --out pc_report   # case with a [pre_chamber] table
 combusta inspect open/thermo.csv
 combusta compare open prechamber --out report --baseline open_chamber
 ```

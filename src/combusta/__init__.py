@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from combusta.case import CaseSource, CycleTrace, EngineCase, OperatingPoint
-from combusta.casefile import FUEL_ALIASES, LoadedCase, load_case
+from combusta.casefile import FUEL_ALIASES, LoadedCase, PreChamberInput, load_case
 from combusta.compare import (
     METRIC_SPECS,
     CaseComparison,
@@ -100,10 +100,29 @@ from combusta.plotting import (
     plot_case_overlay,
     plot_sweep_overview,
     plot_gci_convergence,
+    plot_pre_chamber,
     plot_pv_log_diagram,
     plot_thermo_diagnostics,
 )
-from combusta.report import ComparisonReport, MatchedReport, write_comparison_report, write_matched_report
+from combusta.prechamber import (
+    PreChamberGeometry,
+    PreChamberMetrics,
+    PreChamberResult,
+    analyze_pre_chamber,
+    critical_pressure_ratio,
+    estimate_discharge_coefficient,
+    orifice_mass_flow,
+    pre_chamber_metrics,
+)
+from combusta.report import (
+    ComparisonReport,
+    MatchedReport,
+    PreChamberReport,
+    analyze_case_pre_chamber,
+    write_comparison_report,
+    write_matched_report,
+    write_pre_chamber_report,
+)
 from combusta.signal.filtering import (
     butterworth_zero_phase,
     compute_derivative,
@@ -130,7 +149,14 @@ from combusta.sweep import (
     find_mbt,
     metrics_at,
 )
-from combusta.synthetic import ManufacturedCycle, manufactured_cycle, write_case_directory
+from combusta.synthetic import (
+    ManufacturedCycle,
+    ManufacturedPreChamberCycle,
+    manufactured_cycle,
+    manufactured_pre_chamber_cycle,
+    write_case_directory,
+    write_pre_chamber_case_directory,
+)
 from combusta.thermo import (
     AIR_MOLE_FRACTIONS,
     DIESEL_SURROGATE,
@@ -198,6 +224,22 @@ from combusta.vv import (
 __version__ = "0.3.0"
 
 __all__ = [
+    "ManufacturedPreChamberCycle",
+    "PreChamberGeometry",
+    "PreChamberInput",
+    "PreChamberMetrics",
+    "PreChamberReport",
+    "PreChamberResult",
+    "analyze_case_pre_chamber",
+    "analyze_pre_chamber",
+    "critical_pressure_ratio",
+    "estimate_discharge_coefficient",
+    "manufactured_pre_chamber_cycle",
+    "orifice_mass_flow",
+    "plot_pre_chamber",
+    "pre_chamber_metrics",
+    "write_pre_chamber_case_directory",
+    "write_pre_chamber_report",
     "MBTResult",
     "MatchedComparison",
     "MatchedPoint",

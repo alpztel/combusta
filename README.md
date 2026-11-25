@@ -98,6 +98,16 @@ combusta matched open/*/ prechamber/*/ --mbt --out matched_mbt
 
 Metrics are interpolated within each sweep (no extrapolation); the MBT timing comes from a quadratic fit of gross IMEP around the sweep maximum, with its standard uncertainty ([Section 9](#9-case-comparison)).
 
+### Analyze a pre-chamber case
+
+A case file with a `[pre_chamber]` table (volume, orifices, discharge coefficient, and the pre-chamber pressure column) is analyzed as two volumes connected by the orifices ([Section 10](#10-pre-chamber-two-volume-analysis)):
+
+```bash
+combusta prechamber prechamber_case --out pc_report
+```
+
+The report gives the pressure difference across the orifices, jet start and end, the mass leaving the pre-chamber, the heat release of each volume and the pre-chamber share, and, when zone temperatures or masses are exported, the effective discharge coefficient fitted to the exported mass exchange.
+
 ### Compare two engine configurations in Python
 
 ```python
@@ -158,8 +168,9 @@ print(result.summary())
 | `combusta.case` | `EngineCase`, `OperatingPoint`, `CycleTrace`; provenance (`cfd`, `test_bench`, `model_1d`, `synthetic`); Forte adapter; volume consistency check |
 | `combusta.casefile` | `load_case`: engine cases from `case.toml` files with strict key checking and trace provenance (SHA-256) |
 | `combusta.compare` | `compute_cycle_metrics`, `compare_cases`, `uncertainty_from_gci`; Markdown and pandas output |
+| `combusta.prechamber` | Two-volume pre-chamber analysis: isentropic orifice flow, open-system heat release of both volumes, jet timing and mass, discharge-coefficient fit |
 | `combusta.sweep` | Spark-timing sweeps: `metrics_at` (interpolation to a target CA50 or spark timing), `find_mbt` (quadratic MBT fit with uncertainty), `compare_matched` |
-| `combusta.report`, `combusta.cli` | `write_comparison_report`, `write_matched_report`; the `combusta inspect`, `combusta compare`, and `combusta matched` commands |
+| `combusta.report`, `combusta.cli` | `write_comparison_report`, `write_matched_report`, `write_pre_chamber_report`; the `combusta inspect`, `compare`, `matched`, and `prechamber` commands |
 | `combusta.synthetic` | Manufactured cycles with known heat release (`manufactured_cycle`) and their case files, for testing a pipeline before real data exist |
 | `combusta.thermo` | Fuels and stoichiometry, NASA 7-coefficient polynomials, slider-crank kinematics, heat release, burn fractions, IMEP, Woschni and Hohenberg heat transfer, knock metrics, TDC phasing check |
 | `combusta.emissions` | Exhaust composition, ppm to mass (wet/dry), specific emissions, emission indices, combustion efficiency |
@@ -396,7 +407,25 @@ u^2(\theta_\mathrm{MBT}) = \mathbf{g}^\mathsf{T}\boldsymbol{\Sigma}\,\mathbf{g},
 
 Defining MBT on gross IMEP assumes friction and pumping work do not change with spark timing. An unbracketed maximum (knock- or pre-ignition-limited sweeps) is reported as an error instead of being extrapolated.
 
-### 10. Auto-ignition
+### 10. Pre-chamber two-volume analysis
+
+The pre-chamber (constant volume $`V_{pc}`$) and the main chamber ($`V_{mc}(\theta)`$) are two single-zone open systems connected by the orifices (pre-chamber jet ignition systems are reviewed by Toulson et al., 2010). The orifice mass flow is quasi-steady isentropic flow through a restriction with discharge coefficient $`C_D`$ and total area $`A`$, from the zone with the higher pressure (stagnation state $`p_0, T_0`$) to the other ($`p_T`$) (Heywood, 2018, App. C):
+
+```math
+\dot m = \frac{C_D A\,p_0}{\sqrt{R T_0}}\left(\frac{p_T}{p_0}\right)^{1/\gamma}\sqrt{\frac{2\gamma}{\gamma-1}\left[1-\left(\frac{p_T}{p_0}\right)^{(\gamma-1)/\gamma}\right]},
+\qquad
+\frac{p_T}{p_0} \ge \left(\frac{2}{\gamma+1}\right)^{\gamma/(\gamma-1)}
+```
+
+Below the critical pressure ratio the flow is choked and the ratio is replaced by its critical value. For each zone with net inflow $`dm`$ carrying the specific enthalpy $`h_f`$ of the zone it leaves, the First Law with $`pV = mRT`$, $`dU = m c_v\,dT + u\,dm`$ gives the apparent heat release
+
+```math
+dQ = \frac{V\,dp}{\gamma - 1} + \frac{\gamma\,p\,dV}{\gamma - 1} + \left(u - c_v T - h_f\right)dm
+```
+
+For outflow the bracket equals $`-c_p T`$, and a rigid adiabatic zone then follows isentropic blowdown, $`dp/p = \gamma\,dm/m`$ (checked in the tests). Zone masses come from exported zone masses or temperatures; otherwise the pre-chamber mass is integrated with the orifice model from a uniform initial temperature and the trapped mass. When masses are exported, `estimate_discharge_coefficient` fits the effective $`C_D`$ that maps the orifice model onto the exported mass exchange. Reported metrics are the peak and minimum pressure difference, jet start and end (zero crossings of $`\Delta p`$ around its maximum), jet mass and peak jet flow, the choked share of the jet, the heat release of each volume and the pre-chamber share, and the burn fractions of both volumes. Each volume uses the frozen unburned-charge gas model; with hydrogen this biases the absolute heat release (Section 3), while timing quantities are less sensitive.
+
+### 11. Auto-ignition
 
 Arrhenius-type ignition delay with pressure in bar (Wolfer, 1938; Assanis et al., 2003):
 
@@ -418,7 +447,7 @@ I(\theta) = \int_{\theta_\mathrm{SOI}}^{\theta} \frac{d\theta'}{6N\,\tau_{id}\bi
 I(\theta_\mathrm{SOC}) = 1
 ```
 
-### 11. Second-Law analysis
+### 12. Second-Law analysis
 
 The dead state $`(P_0, T_0)`$ follows the ISO 2533 atmosphere at the flight altitude. Thermomechanical exergy of the charge, with $`s - s_0 = s^\circ(T) - s^\circ(T_0) - R\ln(P/P_0)`$:
 
@@ -454,7 +483,7 @@ Because $`dE_d`$ is computed from entropy generation, the balance
 
 is an independent check: it vanishes, to discretization error, only when pressure, temperature, and heat-release inputs satisfy the First Law with the chosen gas model. The cycle budget also reports the fuel exergy not released as heat, $`m_f\,\varphi\,Q_\mathrm{LHV} - \varphi\int dQ_g`$.
 
-### 12. Spray tip penetration
+### 13. Spray tip penetration
 
 Hiroyasu and Arai (1990), with nozzle diameter $`d_0`$, injection pressure drop $`\Delta P`$, and liquid and gas densities $`\rho_l`$, $`\rho_g`$:
 
@@ -480,7 +509,7 @@ t^+ = \frac{x^+}{C_v\sqrt{2\Delta P/\rho_l}},
 
 solved for $`\tilde S`$ by Newton iteration, with $`a = 0.66`$. Both correlations describe the tip of a non-vaporizing jet; liquid wall wetting in an evaporating spray is governed by the liquid length (Siebers, 1999), which is not modeled.
 
-### 13. Standard atmosphere
+### 14. Standard atmosphere
 
 ISO 2533 troposphere ($`z \le 11`$ km, lapse rate $`L = 6.5`$ K/km) and isothermal lower stratosphere:
 
@@ -512,7 +541,9 @@ Verification checks that the equations are implemented correctly; it says nothin
 
 | `test_13_matched_comparison` | Exact vertex of a parabola; delta-method vertex uncertainty against a 4000-sample Monte Carlo experiment; PCHIP reproduces sweep members and linear data; two manufactured sweeps with the same burn law but a 2 deg longer ignition delay agree at matched CA50 (IMEP and efficiency within 0.1 %) and shift MBT timing by 2 deg | JCGM 100:2008; Fritsch & Carlson (1980) |
 
-At the time of writing, 190 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
+| `test_14_prechamber` | Critical pressure ratio 0.5283 and choked flow function 0.6847 (γ = 1.4); continuity at the critical ratio; isentropic blowdown of a rigid zone; a manufactured two-volume cycle inverted from zone masses, zone temperatures, and the orifice model recovers both heat releases (pre-chamber within 0.1 %, main chamber within 0.01 %) and the discharge coefficient (0.700); case file, report, and command line | Heywood (2018) App. C; manufactured solution |
+
+At the time of writing, 209 tests pass on Python 3.11, 3.12 and 3.13, and the package type-checks cleanly with pyrefly.
 
 ## Example: synthetic altitude sweep
 
@@ -533,7 +564,7 @@ At the time of writing, 190 tests pass on Python 3.11, 3.12 and 3.13, and the pa
 | 15,000 ft | 57.2 | 243.2 | 41.1 | 5.6 / 0.39 | −2.44 | 11.51 | 10.79 | 16.14 | 48.9 |
 | 30,000 ft | 30.1 | 165.5 | 30.6 | 8.9 / 0.62 | +0.90 | 7.99 | 10.58 | 19.49 | 47.9 |
 
-Up to the critical altitude the turbocharger keeps the manifold pressure, and the colder charge air at 15,000 ft slightly raises the in-cylinder density. Above it, the lower charge density and temperature lengthen the ignition delay and retard combustion. The exergy closure error (Section 11) is below 0.01 % in all three cases.
+Up to the critical altitude the turbocharger keeps the manifold pressure, and the colder charge air at 15,000 ft slightly raises the in-cylinder density. Above it, the lower charge density and temperature lengthen the ignition delay and retard combustion. The exergy closure error (Section 12) is below 0.01 % in all three cases.
 
 | First-Law cycle diagnostics | Logarithmic P-V diagram |
 | :---: | :---: |
@@ -549,7 +580,7 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 - **Composition.** Burned gas is complete combustion without dissociation, which is adequate below about 2200 K. Rich hydrocarbon products are not supported.
 - **Heat transfer.** Woschni and Hohenberg correlations carry their original constants and must be calibrated for a specific engine.
 - **Ignition.** The delay correlations were fitted to diesel engines; applying them to kerosene through cetane-number scaling is a heuristic. The Livengood-Wu integral is exact only for homogeneous mixtures.
-- **Spray.** Tip-penetration correlations do not predict liquid wall wetting (Section 12).
+- **Spray.** Tip-penetration correlations do not predict liquid wall wetting (Section 13).
 - **Knock.** MAPO and ringing intensity need a local pressure signal; spatially averaged CFD pressure removes the acoustic modes.
 - **GCI with adaptive meshing.** Adaptive mesh refinement is not a systematic refinement; a GCI computed from cell counts of AMR runs should be interpreted with care.
 - **Exergy.** The budget uses a single gas model of constant composition.
@@ -558,7 +589,8 @@ Within 0.85 ms after injection the Hiroyasu-Arai tip does not reach the 38 mm bo
 ## Roadmap
 
 - Validation on real ANSYS Forte cases and test-bench data.
-- Pre-chamber (turbulent jet ignition) analysis: chamber pressure difference, jet timing, orifice mass flow, and pre-chamber heat release.
+- Pre-chamber analysis with burned/unburned composition tracking in both volumes (the current two-volume analysis uses frozen composition).
+- Uncertainty of pressure-derived metrics from measurement errors (TDC offset, pegging, gain, noise).
 - Multi-cycle test-bench analysis: cycle averaging, coefficient of variation, pressure pegging.
 - Readers for further CFD and 1D formats.
 - Liquid-length scaling (Siebers, 1999) and least-squares grid uncertainty (Eça & Hoekstra, 2014) for noisy or adaptive-mesh studies.
@@ -635,54 +667,55 @@ ANSYS and Forte are trademarks of their respective owner; Combusta is an indepen
 6. Pipitone, E., Beccari, A., & Beccari, S. (2008). Reliable TDC position determination: a comparison of different thermodynamic methods through experimental data and simulations. *SAE Technical Paper* 2008-36-0059. https://doi.org/10.4271/2008-36-0059
 7. Eng, J. A. (2002). Characterization of pressure waves in HCCI combustion. *SAE Technical Paper* 2002-01-2859. https://doi.org/10.4271/2002-01-2859
 8. Turns, S. R. (2012). *An Introduction to Combustion: Concepts and Applications* (3rd ed.). McGraw-Hill.
+9. Toulson, E., Schock, H., & Attard, W. (2010). A review of pre-chamber initiated jet ignition combustion systems. *SAE Technical Paper* 2010-01-2263. https://doi.org/10.4271/2010-01-2263
 
 **Thermochemical data**
 
-9. Gordon, S., & McBride, B. J. (1994). *Computer Program for Calculation of Complex Chemical Equilibrium Compositions and Applications. I. Analysis*. NASA Reference Publication 1311.
-10. McBride, B. J., Zehe, M. J., & Gordon, S. (2002). *NASA Glenn Coefficients for Calculating Thermodynamic Properties of Individual Species*. NASA/TP-2002-211556.
-11. Smith, G. P., Golden, D. M., Frenklach, M., Moriarty, N. W., Eiteneer, B., Goldenberg, M., Bowman, C. T., Hanson, R. K., Song, S., Gardiner, W. C., Lissianski, V. V., & Qin, Z. *GRI-Mech 3.0*. http://combustion.berkeley.edu/gri-mech/
-12. Chase, M. W. (1998). *NIST-JANAF Thermochemical Tables* (4th ed.). Journal of Physical and Chemical Reference Data, Monograph 9.
-13. Ruscic, B., & Bross, D. H. *Active Thermochemical Tables (ATcT)*. Argonne National Laboratory. https://atct.anl.gov
-14. Wieser, M. E., & Berglund, M. (2009). Atomic weights of the elements 2007 (IUPAC Technical Report). *Pure and Applied Chemistry*, 81(11), 2131–2156.
+10. Gordon, S., & McBride, B. J. (1994). *Computer Program for Calculation of Complex Chemical Equilibrium Compositions and Applications. I. Analysis*. NASA Reference Publication 1311.
+11. McBride, B. J., Zehe, M. J., & Gordon, S. (2002). *NASA Glenn Coefficients for Calculating Thermodynamic Properties of Individual Species*. NASA/TP-2002-211556.
+12. Smith, G. P., Golden, D. M., Frenklach, M., Moriarty, N. W., Eiteneer, B., Goldenberg, M., Bowman, C. T., Hanson, R. K., Song, S., Gardiner, W. C., Lissianski, V. V., & Qin, Z. *GRI-Mech 3.0*. http://combustion.berkeley.edu/gri-mech/
+13. Chase, M. W. (1998). *NIST-JANAF Thermochemical Tables* (4th ed.). Journal of Physical and Chemical Reference Data, Monograph 9.
+14. Ruscic, B., & Bross, D. H. *Active Thermochemical Tables (ATcT)*. Argonne National Laboratory. https://atct.anl.gov
+15. Wieser, M. E., & Berglund, M. (2009). Atomic weights of the elements 2007 (IUPAC Technical Report). *Pure and Applied Chemistry*, 81(11), 2131–2156.
 
 **Auto-ignition**
 
-15. Wolfer, H. H. (1938). Der Zündverzug im Dieselmotor. *VDI-Forschungsheft* 392.
-16. Livengood, J. C., & Wu, P. C. (1955). Correlation of autoignition phenomena in internal combustion engines and rapid compression machines. *Fifth Symposium (International) on Combustion*, 347–356. https://doi.org/10.1016/S0082-0784(55)80047-1
-17. Hardenberg, H. O., & Hase, F. W. (1979). An empirical formula for computing the pressure rise delay of a fuel from its cetane number and from the relevant parameters of direct-injection diesel engines. *SAE Technical Paper* 790493. https://doi.org/10.4271/790493
-18. Assanis, D. N., Filipi, Z. S., Fiveland, S. B., & Syrimis, M. (2003). A predictive ignition delay correlation under steady-state and transient operation of a direct injection diesel engine. *Journal of Engineering for Gas Turbines and Power*, 125(2), 450–457. https://doi.org/10.1115/1.1563238
+16. Wolfer, H. H. (1938). Der Zündverzug im Dieselmotor. *VDI-Forschungsheft* 392.
+17. Livengood, J. C., & Wu, P. C. (1955). Correlation of autoignition phenomena in internal combustion engines and rapid compression machines. *Fifth Symposium (International) on Combustion*, 347–356. https://doi.org/10.1016/S0082-0784(55)80047-1
+18. Hardenberg, H. O., & Hase, F. W. (1979). An empirical formula for computing the pressure rise delay of a fuel from its cetane number and from the relevant parameters of direct-injection diesel engines. *SAE Technical Paper* 790493. https://doi.org/10.4271/790493
+19. Assanis, D. N., Filipi, Z. S., Fiveland, S. B., & Syrimis, M. (2003). A predictive ignition delay correlation under steady-state and transient operation of a direct injection diesel engine. *Journal of Engineering for Gas Turbines and Power*, 125(2), 450–457. https://doi.org/10.1115/1.1563238
 
 **Fuel sprays**
 
-19. Hiroyasu, H., & Arai, M. (1990). Structures of fuel sprays in diesel engines. *SAE Technical Paper* 900475. https://doi.org/10.4271/900475
-20. Naber, J. D., & Siebers, D. L. (1996). Effects of gas density and vaporization on penetration and dispersion of diesel sprays. *SAE Technical Paper* 960034. https://doi.org/10.4271/960034
-21. Siebers, D. L. (1999). Scaling liquid-phase fuel penetration in diesel sprays based on mixing-limited vaporization. *SAE Technical Paper* 1999-01-0528. https://doi.org/10.4271/1999-01-0528
+20. Hiroyasu, H., & Arai, M. (1990). Structures of fuel sprays in diesel engines. *SAE Technical Paper* 900475. https://doi.org/10.4271/900475
+21. Naber, J. D., & Siebers, D. L. (1996). Effects of gas density and vaporization on penetration and dispersion of diesel sprays. *SAE Technical Paper* 960034. https://doi.org/10.4271/960034
+22. Siebers, D. L. (1999). Scaling liquid-phase fuel penetration in diesel sprays based on mixing-limited vaporization. *SAE Technical Paper* 1999-01-0528. https://doi.org/10.4271/1999-01-0528
 
 **Second-Law analysis**
 
-22. Kotas, T. J. (1995). *The Exergy Method of Thermal Plant Analysis* (reprint ed.). Krieger Publishing.
-23. Caton, J. A. (2000). A review of investigations using the second law of thermodynamics to study internal-combustion engines. *SAE Technical Paper* 2000-01-1081. https://doi.org/10.4271/2000-01-1081
-24. Rakopoulos, C. D., & Giakoumis, E. G. (2006). Second-law analyses applied to internal combustion engines operation. *Progress in Energy and Combustion Science*, 32(1), 2–47.
+23. Kotas, T. J. (1995). *The Exergy Method of Thermal Plant Analysis* (reprint ed.). Krieger Publishing.
+24. Caton, J. A. (2000). A review of investigations using the second law of thermodynamics to study internal-combustion engines. *SAE Technical Paper* 2000-01-1081. https://doi.org/10.4271/2000-01-1081
+25. Rakopoulos, C. D., & Giakoumis, E. G. (2006). Second-law analyses applied to internal combustion engines operation. *Progress in Energy and Combustion Science*, 32(1), 2–47.
 
 **Verification, validation, and uncertainty**
 
-25. Roache, P. J. (1998). *Verification and Validation in Computational Science and Engineering*. Hermosa Publishers.
-26. Celik, I. B., Ghia, U., Roache, P. J., Freitas, C. J., Coleman, H., & Raad, P. E. (2008). Procedure for estimation and reporting of uncertainty due to discretization in CFD applications. *Journal of Fluids Engineering*, 130(7), 078001. https://doi.org/10.1115/1.2960953
-27. ASME (2009). *V&V 20-2009: Standard for Verification and Validation in Computational Fluid Dynamics and Heat Transfer*. American Society of Mechanical Engineers.
-28. JCGM (2008). *JCGM 100:2008 — Evaluation of measurement data: Guide to the expression of uncertainty in measurement*. Joint Committee for Guides in Metrology.
-29. National Institute of Standards and Technology (2020). *A Summary of Industrial Verification, Validation, and Uncertainty Quantification Procedures in Computational Fluid Dynamics*. NIST IR 8298. https://doi.org/10.6028/NIST.IR.8298
-30. Eça, L., & Hoekstra, M. (2014). A procedure for the estimation of the numerical uncertainty of CFD calculations based on grid refinement studies. *Journal of Computational Physics*, 262, 104–130. https://doi.org/10.1016/j.jcp.2014.01.006
+26. Roache, P. J. (1998). *Verification and Validation in Computational Science and Engineering*. Hermosa Publishers.
+27. Celik, I. B., Ghia, U., Roache, P. J., Freitas, C. J., Coleman, H., & Raad, P. E. (2008). Procedure for estimation and reporting of uncertainty due to discretization in CFD applications. *Journal of Fluids Engineering*, 130(7), 078001. https://doi.org/10.1115/1.2960953
+28. ASME (2009). *V&V 20-2009: Standard for Verification and Validation in Computational Fluid Dynamics and Heat Transfer*. American Society of Mechanical Engineers.
+29. JCGM (2008). *JCGM 100:2008 — Evaluation of measurement data: Guide to the expression of uncertainty in measurement*. Joint Committee for Guides in Metrology.
+30. National Institute of Standards and Technology (2020). *A Summary of Industrial Verification, Validation, and Uncertainty Quantification Procedures in Computational Fluid Dynamics*. NIST IR 8298. https://doi.org/10.6028/NIST.IR.8298
+31. Eça, L., & Hoekstra, M. (2014). A procedure for the estimation of the numerical uncertainty of CFD calculations based on grid refinement studies. *Journal of Computational Physics*, 262, 104–130. https://doi.org/10.1016/j.jcp.2014.01.006
 
 **Signal processing and interpolation**
 
-31. Savitzky, A., & Golay, M. J. E. (1964). Smoothing and differentiation of data by simplified least squares procedures. *Analytical Chemistry*, 36(8), 1627–1639. https://doi.org/10.1021/ac60214a047
-32. Fornberg, B. (1988). Generation of finite difference formulas on arbitrarily spaced grids. *Mathematics of Computation*, 51(184), 699–706. https://doi.org/10.1090/S0025-5718-1988-0935077-0
-33. Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation. *SIAM Journal on Numerical Analysis*, 17(2), 238–246. https://doi.org/10.1137/0717021
+32. Savitzky, A., & Golay, M. J. E. (1964). Smoothing and differentiation of data by simplified least squares procedures. *Analytical Chemistry*, 36(8), 1627–1639. https://doi.org/10.1021/ac60214a047
+33. Fornberg, B. (1988). Generation of finite difference formulas on arbitrarily spaced grids. *Mathematics of Computation*, 51(184), 699–706. https://doi.org/10.1090/S0025-5718-1988-0935077-0
+34. Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation. *SIAM Journal on Numerical Analysis*, 17(2), 238–246. https://doi.org/10.1137/0717021
 
 **Standards and data sources**
 
-34. ISO 2533:1975. *Standard Atmosphere*. International Organization for Standardization.
-35. ISO 8178-1. *Reciprocating internal combustion engines — Exhaust emission measurement — Part 1: Test-bed measurement systems of gaseous and particulate emissions*. International Organization for Standardization.
-36. U.S. Code of Federal Regulations, Title 40, Part 1065. *Engine-Testing Procedures*.
-37. Thompson, A., & Taylor, B. N. (2008). *Guide for the Use of the International System of Units (SI)*. NIST Special Publication 811.
-38. Engine Combustion Network. Sandia National Laboratories. https://ecn.sandia.gov
+35. ISO 2533:1975. *Standard Atmosphere*. International Organization for Standardization.
+36. ISO 8178-1. *Reciprocating internal combustion engines — Exhaust emission measurement — Part 1: Test-bed measurement systems of gaseous and particulate emissions*. International Organization for Standardization.
+37. U.S. Code of Federal Regulations, Title 40, Part 1065. *Engine-Testing Procedures*.
+38. Thompson, A., & Taylor, B. N. (2008). *Guide for the Use of the International System of Units (SI)*. NIST Special Publication 811.
+39. Engine Combustion Network. Sandia National Laboratories. https://ecn.sandia.gov
