@@ -42,6 +42,7 @@ From exported data to a comparison report, and the analyses needed to compare an
 - `tests/test_12_data_intake.py`.
 
 ### Fixed
+- `write_case_directory` writes LF line endings on every platform, so the SHA-256 of a written trace no longer depends on the operating system (#17).
 - Without a temperature trace, `compute_cycle_metrics` reconstructed the temperature with the unburned gas constant. It now passes the trapped mass to `compute_heat_release(trapped_mass_kg=...)`, which evaluates $T = PV/(m R(x_b))$ inside the $x_b$ iteration. For hydrogen at λ = 2 the old behaviour overstated the gross heat release of a manufactured case by 0.4 %.
 
 ## [0.3.0] - 2026-11-25

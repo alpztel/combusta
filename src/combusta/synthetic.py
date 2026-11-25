@@ -275,7 +275,7 @@ def write_case_directory(
         raise ValueError(f"Unknown trace_format {trace_format!r}.")
     matrix = np.column_stack(data)
     lines += [",".join(f"{v:.12g}" for v in row) for row in matrix]
-    (out / trace_name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (out / trace_name).write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
     geo, op = case.geometry, case.operating_point
     toml = [
@@ -310,7 +310,7 @@ def write_case_directory(
     if case.metadata:
         toml += ["", "[metadata]"] + [f"{_toml_value(k)} = {_toml_value(v)}" for k, v in case.metadata.items()]
     path = out / "case.toml"
-    path.write_text("\n".join(toml) + "\n", encoding="utf-8")
+    path.write_text("\n".join(toml) + "\n", encoding="utf-8", newline="\n")
     return path
 
 
